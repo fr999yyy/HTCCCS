@@ -9,7 +9,7 @@ var userDisplay = document.getElementById("userDisplay");
 var JSelRange = localStorage.getItem('JSelRange') ?? 6;
 var HSelRange = localStorage.getItem('HSelRange') ?? 6;
 var totalSections = 12;
-var formtype = 'j2';
+var formtype = 'j1';
 function appendHtml(sectionNumber, className, classInfo, pfp) {
     const container = document.getElementById('section-tabContent');
     if (!container) {
@@ -61,20 +61,10 @@ function appendHtml(sectionNumber, className, classInfo, pfp) {
     container.appendChild(newDiv);
   }
   
-  // Example usage:
-  for (let i = 1; i <= 15; i++) {
-    console.log(i);
-    appendHtml(i, `皇后搖滾街舞${i}`, `一百字街舞課程${i}`);
-  }
-
-
-
-for (var i = 1; i <= totalSections; i++) {   
-var sectionTabContent = document.getElementById('section-tabContent');
-var textNode = document.createTextNode('');
-sectionTabContent.appendChild(textNode);
+for (let i = 1; i <= 15; i++) {
+console.log(i);
+appendHtml(i, `皇后搖滾街舞${i}`, `一百字街舞課程${i}`);
 }
-
 
 if (formtype == 'j1') {
     document.title = '第一次選課｜國中部';
@@ -82,7 +72,6 @@ if (formtype == 'j1') {
     document.getElementById('section-1-tab').classList.add('active');
     document.getElementById('section1').classList.add('active', 'show');
     for (var i = JSelRange; i < 15; i++) {
-        console.log('section-' + (i+1) + '-tab');
         document.getElementById('section-' + (i+1) + '-tab').remove();
     }
 } else if (formtype == 'j2') {
@@ -90,12 +79,8 @@ if (formtype == 'j1') {
     document.getElementById('formType').innerHTML = '第二次選課｜國中部';
     document.getElementById('section-'+ (JSelRange+1) +'-tab').classList.add('active');
     document.getElementById('section'+ (JSelRange+1) ).classList.add('active', 'show');
-    for (var i = 0; i < JSelRange ; i++) {
-        console.log('section-' + (i+1) + '-tab');
-        document.getElementById('section-' + (i+1) + '-tab').remove();
-    }
-    for (var i = totalSections; i < 15; i++) {
-        console.log('section-' + (i+1) + '-tab');
+    for (var i = 0; i < 15; i++) {
+        if (i >= JSelRange && i < totalSections) continue;
         document.getElementById('section-' + (i+1) + '-tab').remove();
     }
 } else if(uformtype == 'h1') {
@@ -104,21 +89,16 @@ if (formtype == 'j1') {
     document.getElementById('section-1-tab').classList.add('active');
     document.getElementById('section1').classList.add('active', 'show');
     for (var i = HSelRange; i < 15; i++) {
-        console.log('section-' + (i+1) + '-tab');
         document.getElementById('section-' + (i+1) + '-tab').remove();
     }
 }
 else if(formtype == 'h2') {
     document.title = '第二次選課｜高中部';
     document.getElementById('formType').innerHTML = '第二次選課｜國中部';
-    document.getElementById('section-'+ (JSelRange+1) +'-tab').classList.add('active');
-    document.getElementById('section'+ (JSelRange+1) ).classList.add('active', 'show');
-    for (var i = 0; i < JSelRange ; i++) {
-        console.log('section-' + (i+1) + '-tab');
-        document.getElementById('section-' + (i+1) + '-tab').remove();
-    }
-    for (var i = totalSections; i < 15; i++) {
-        console.log('section-' + (i+1) + '-tab');
+    document.getElementById('section-'+ (HSelRange+1) +'-tab').classList.add('active');
+    document.getElementById('section'+ (HSelRange+1) ).classList.add('active', 'show');
+    for (var i = 0; i < 15; i++) {
+        if (i >= HSelRange && i < totalSections) continue;
         document.getElementById('section-' + (i+1) + '-tab').remove();
     }
 }
@@ -159,12 +139,6 @@ else if(formtype == 'h2') {
 //     document.getElementById('formType').innerHTML = '第二次選課｜高中部';
 //     formtype = 'h2';
 // }
-
-
-
-// Classes Display
-
-
 
 // display the user type and team
 switch(team){

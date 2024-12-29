@@ -24,7 +24,10 @@ margin:70px;
     font-size: 3vw !important;
 }
 
-
+.bNavLink:hover {
+    background-color: #f8f9fa !important; /* Light background */
+    color: #007bff !important; /* Primary text color */
+}
 
 .bUser{
     font-size: 2.5vw !important; 
