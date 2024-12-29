@@ -83,7 +83,7 @@ if (formtype == 'j1') {
         if (i >= JSelRange && i < totalSections) continue;
         document.getElementById('section-' + (i+1) + '-tab').remove();
     }
-} else if(uformtype == 'h1') {
+} else if(formtype == 'h1') {
     document.title = '第一次選課｜高中部';
     document.getElementById('formType').innerHTML = '第一次選課｜高中部';
     document.getElementById('section-1-tab').classList.add('active');
