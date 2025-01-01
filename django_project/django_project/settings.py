@@ -33,7 +33,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django_app.apps.DjangoAppConfig',
+    'django_app',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,10 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
-AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # Keep the default backend
-    'django_app.backends.CustomAuthBackend',        # Add your custom backend
-]
+
 
 AUTH_USER_MODEL = 'django_app.CustomUser'
 
@@ -87,8 +84,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', 
         'NAME': 'htcccs',                      
-        'USER': 'root',                 
-        'PASSWORD': '**HTCCcs**',               
+        'USER': 'root',
+        'PASSWORD': '**HTCCcs**',
         'HOST': '127.0.0.1',                           
         'PORT': '3306',                           
     }

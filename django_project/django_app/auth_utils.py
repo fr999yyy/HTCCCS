@@ -1,24 +1,25 @@
 from django.shortcuts import redirect
 from django.contrib import messages
-from .models import Students
+from .models import Student
 
 def std_authenticate(std_id, team, satb):
     try:
-        student = Students.objects.get(std_id=std_id, team=team, satb=satb)
+        student = Student.objects.get(std_id=std_id, team=team, satb=satb)
         return student
-    except Students.DoesNotExist:
+    except Student.DoesNotExist:
         return None
 
 def get_student(std_id):
     try:
-        return Students.objects.get(pk=std_id)
-    except Students.DoesNotExist:
+        return Student.objects.get(pk=std_id)
+    except Student.DoesNotExist:
         return None
 
 def std_login(request, student):
     request.session['std_id'] = student.std_id
     request.session['team'] = student.team
-    request.session['satb'] = student.satb
+    request.session['std_name'] = student.std_name
+    request.session['JorH'] = student.j_or_h
 
 def std_logout(request):
     request.session.flush()

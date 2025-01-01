@@ -2,7 +2,9 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.contrib.auth.models import User, auth
 from django.contrib import messages
+from datetime import datetime
 from .auth_utils import std_authenticate, std_login, std_logout, get_student
+from .models import AdminSetting, Student, Section, Course, CourseVolunteer, Form, CustomUser
 
 # Create your views here.
 
@@ -44,9 +46,11 @@ def vLogin(request):
 
 def pSel(request):
     if request.session.has_key('std_id'):
+
         std_id = request.session['std_id']
-        student = get_student(std_id)
+        team = request.session['team']
+        JorH = request.session['JorH']
+        student = {'std_id': std_id, 'team': team, 'JorH': JorH}
         return render(request, 'pSel.html', {'student': student})
     else:
         return redirect('/stdLogin')
-    pass
