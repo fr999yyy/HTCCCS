@@ -3,6 +3,7 @@ from django.http import HttpResponse
 from django.contrib.auth.models import User, auth
 from django.contrib import messages
 from .auth_utils import std_authenticate, std_login, std_logout, get_student
+from .models import Student, AdminSetting
 
 # Create your views here.
 
@@ -45,7 +46,10 @@ def vLogin(request):
 def pSel(request):
     if request.session.has_key('std_id'):
         std_id = request.session['std_id']
-        student = get_student(std_id)
+        team = request.session['team']
+        student_instance = Student.objects.get(std_id=std_id)
+        team_display = Student.TEAM_CHOICES[team-1][1]
+        student = { 'std_id': std_id , 'team_display': team_display, 'std_name': student_instance.std_name}  
         return render(request, 'pSel.html', {'student': student})
     else:
         return redirect('/stdLogin')

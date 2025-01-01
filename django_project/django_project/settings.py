@@ -42,10 +42,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
-AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # Keep the default backend
-    'django_app.backends.CustomAuthBackend',        # Add your custom backend
-]
 
 AUTH_USER_MODEL = 'django_app.CustomUser'
 
