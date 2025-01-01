@@ -1,18 +1,12 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import HttpResponse
-<<<<<<< HEAD
 from django.contrib.auth.models import User, auth
 from django.contrib import messages
-from datetime import datetime
 from .auth_utils import std_authenticate, std_login, std_logout, get_student
-from .models import AdminSetting, Student, Section, Course, CourseVolunteer, Form, CustomUser
-=======
->>>>>>> parent of fbc6a56 (完成學員登入系統)
 
 # Create your views here.
 
 def index(request):
-<<<<<<< HEAD
     return render(request, 'index.html')
 
 def stdLogin(request):
@@ -50,14 +44,9 @@ def vLogin(request):
 
 def pSel(request):
     if request.session.has_key('std_id'):
-
         std_id = request.session['std_id']
-        team = request.session['team']
-        JorH = request.session['JorH']
-        student = {'std_id': std_id, 'team': team, 'JorH': JorH}
+        student = get_student(std_id)
         return render(request, 'pSel.html', {'student': student})
     else:
         return redirect('/stdLogin')
-=======
-    return render(request, 'index.html')
->>>>>>> parent of fbc6a56 (完成學員登入系統)
+    pass
