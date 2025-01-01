@@ -33,7 +33,10 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+<<<<<<< HEAD
     'django_app',
+=======
+>>>>>>> parent of fbc6a56 (完成學員登入系統)
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,10 +45,13 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
+<<<<<<< HEAD
 
 
 AUTH_USER_MODEL = 'django_app.CustomUser'
 
+=======
+>>>>>>> parent of fbc6a56 (完成學員登入系統)
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -84,9 +90,15 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', 
         'NAME': 'htcccs',                      
+<<<<<<< HEAD
         'USER': 'root',
         'PASSWORD': '**HTCCcs**',
         'HOST': '127.0.0.1',                           
+=======
+        'USER': 'root',                      
+        'PASSWORD': '****',               
+        'HOST': '',                           
+>>>>>>> parent of fbc6a56 (完成學員登入系統)
         'PORT': '3306',                           
     }
 }

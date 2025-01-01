@@ -1,6 +1,7 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+
 # Create your models here.
+<<<<<<< HEAD
 
 
 
@@ -88,3 +89,5 @@ class AdminSetting(models.Model):
     def __str__(self):
         return f"{self.setting_name}: {self.value}"
 
+=======
+>>>>>>> parent of fbc6a56 (完成學員登入系統)
