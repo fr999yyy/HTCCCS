@@ -10,6 +10,8 @@ var JSelRange = localStorage.getItem('JSelRange') ?? 6;
 var HSelRange = localStorage.getItem('HSelRange') ?? 6;
 var totalSections = 12;
 var formtype = 'j1';
+var loremInfo = '街舞課程，透過皇后合唱團的音樂帶動舞蹈，自編街舞教材，4個8的街舞動作配合皇后合唱團的搖滾音樂。街舞課程，透過皇后合唱團的音樂帶動舞蹈，自編街舞教材，4個8的街舞動作配合皇后合唱團的搖滾音樂。4個8的街舞動作配合皇后合唱團的搖滾音樂。街舞課程，透過皇后合唱團的音樂帶動舞蹈，自編街舞教材，4個8的街舞動作配合皇后合唱團的搖滾音樂。街舞課程，透過皇后合唱團的音樂帶動舞蹈，自編街舞教材，4個8的街舞動作配合皇后合唱團的搖滾音樂。4個8的街舞動作配合皇后合唱團的搖滾音樂。'
+
 function appendHtml(sectionNumber, className, classInfo, pfp) {
     const container = document.getElementById('section-tabContent');
     if (!container) {
@@ -17,7 +19,7 @@ function appendHtml(sectionNumber, className, classInfo, pfp) {
         return;
     }
     className = className ?? '皇后搖滾街舞';
-    classInfo = classInfo ?? '一百字街舞課程';
+    classInfo = classInfo ?? loremInfo;
     pfp = pfp ?? 'profile';
     const newDiv = document.createElement('div');
     newDiv.classList.add('tab-pane', 'fade', 'p-3');
@@ -27,7 +29,7 @@ function appendHtml(sectionNumber, className, classInfo, pfp) {
     const newHTML = `
       <h2 id="sectionTime${sectionNumber}" class="text-center mb-3">7/11 (四) 14:00~17:00</h2>
       <ul class="list-group">
-         <li class="list-group-item">
+         <li class="list-group-item bg-transparent">
           <div class="d-flex align-items-center">
                 <select
                         class="form-select form-select-sm text-center"
@@ -41,13 +43,17 @@ function appendHtml(sectionNumber, className, classInfo, pfp) {
                         <option value="">3</option>
                         <option value="">4</option>
                 </select>
-                <div id="className${sectionNumber}" class="lead fw-bold mx-2">${className}</div>
+                <div id="className${sectionNumber}" class="lead fw-bold mx-4">${className}</div>
                 <button class="btn btn-secondary ms-auto me-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapseC${sectionNumber}1" aria-expanded="false" aria-controls="collapseC${sectionNumber}">詳細資訊</button>
           </div>
           <div class="collapse" id="collapseC${sectionNumber}1">
             <div class="card card-body border-0 d-flex flex-row align-items-start ps-0">
-              <img src="assets/${pfp}.jpg" class="rounded-circle profile mx-3" alt="" id="pfp${sectionNumber}" />
-              <div id="classInfo${sectionNumber}" class="info">${classInfo}</div>
+                <div class="position-relative mx-3" style="width: 100px ;height: 90px;">
+                <img src="assets/${pfp}.jpg" class="rounded-circle profile position-absolute" style="left: 20%; transform: translateX(-50%); z-index: 1" alt="" id="pfp${sectionNumber}" />
+                <img src="assets/${pfp}.jpg" class="rounded-circle profile position-absolute" style="opacity:50%;left:60% ; transform: translateX(-50%);" alt="" id="pfp${sectionNumber}" />
+                </div>
+
+                <div id="classInfo${sectionNumber}" class="info">${classInfo}<br>123123123</div>
             </div>
           </div>
             </li>
