@@ -1,0 +1,14 @@
+<header class="fixed-top">
+    <div class="d-flex bg-primary justify-content-between align-items-center">
+        <nav
+            class="ms-1 text-light nav justify-content-start"
+        >
+            <a class="nav-link fw-bold text-light bNavLink" href="{% url 'result' %}">跑志願與結果</a>
+            <a class="nav-link fw-bold text-light bNavLink" href="{% url 'update' %}">修改資訊</a>
+            <a class="nav-link fw-bold text-light bNavLink" href="{% url 'newYear' %}">新增年份</a>
+        </nav>
+        <div class="me-3 ">
+            <p class="lead text-light m-0">年份：{{ db_name }}</p>
+        </div>
+    </div>
+</header>

@@ -26,7 +26,12 @@ class Student(models.Model):
     ('J', 'Junior'),
     ('H', 'High')
 ]
-
+    FORM_DISPLAY = {
+        'J1' : '第一次選課｜國中部',
+        'J2' : '第二次選課｜國中部',
+        'H1' : '第一次選課｜高中部',
+        'H2' : '第二次選課｜高中部'
+    }
     std_id = models.IntegerField(primary_key=True)
     std_name = models.CharField(max_length=10)
     team = models.IntegerField(choices=TEAM_CHOICES)
@@ -35,8 +40,6 @@ class Student(models.Model):
     std_tag = models.CharField(max_length=15, blank=True, null=True)
     def __str__(self):
         return self.std_name
-    def get_team_display(self):
-         return dict(TEAM_CHOICES).get(team)
     def get_j_or_h(self):
         return self.dict(J_OR_H_CHOICES).get(j_or_h)
 

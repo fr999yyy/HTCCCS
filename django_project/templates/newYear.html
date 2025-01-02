@@ -22,21 +22,21 @@
     </head>
 
     <body>
-        <header class="fixed-top">
-            <div class="d-flex bg-primary justify-content-between align-items-center">
-                <nav
-                    class="ms-1 text-light nav justify-content-start"
-                >
-                    <a class="nav-link fw-bold text-light bNavLink" href="result.html">跑志願與結果</a>
-                    <a class="nav-link fw-bold text-light bNavLink" href="update.html">修改資訊</a>
-                    <a class="nav-link fw-bold text-light bNavLink" href="newYear.html">新增年份</a>
-                </nav>
-                <div class="me-3 ">
-                    <p class="lead text-light m-0">年份：2025</p>
+        {% include 'dashboard_navbar.html' %}
+        <main class="mt-5 pt-1">
+            {% for message in messages %}
+                {% if message.tags == 'error' %}
+                <div class="alert alert-danger alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
+                    <strong>上傳失敗！</strong> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-            </div>
-        </header>
-        <main class="mt-5 pt-3">
+                {% elif message.tags == 'success' %}
+                <div class="alert alert-success alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
+                    <strong>上傳成功！</strong> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+            {% endfor %}
             <div class="container">
                 <div class="text-start my-3">
                     <h1 class="display-6">新增年份</h1>
@@ -56,15 +56,12 @@
                         </div>
                     </div>
                     <div class="mb-3 col-3">
-                        <label for="uploadZip" class="form-label">上傳檔案</label>
-                        <input
-                            type="file"
-                            class="form-control"
-                            name="dbzip"
-                            id="uploadZip"
-                            placeholder="上傳檔案"
-                            aria-describedby="fileHelpId"
-                        />
+                        <form method="post" enctype="multipart/form-data" action="{% url 'upload_zip' %}">
+                            {% csrf_token %}
+                            <label for="uploadZip" class="form-label">上傳資料壓縮檔</label>
+                            <input type="file" class="form-control" name="uploadZip" id="uploadZip" accept=".zip">
+                            <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
+                        </form>
                     </div>
                     <div class="mb-5 col-6">
                         <ul class="list-group">
@@ -143,7 +140,7 @@
         <footer>
             <!-- place footer here -->
         </footer>
-        <script src="js/newYear.js"></script>
+        <!-- <script src="js/newYear.js"></script> -->
         <!-- Bootstrap JavaScript Libraries -->
         <script
             src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"

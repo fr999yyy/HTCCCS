@@ -22,20 +22,7 @@
     </head>
 
     <body>
-        <header class="fixed-top">
-            <div class="d-flex bg-primary justify-content-between align-items-center">
-                <nav
-                    class="ms-1 text-light nav justify-content-start"
-                >
-                    <a class="nav-link fw-bold text-light bNavLink" href="result.html">跑志願與結果</a>
-                    <a class="nav-link fw-bold text-light bNavLink" href="update.html">修改資訊</a>
-                    <a class="nav-link fw-bold text-light bNavLink" href="newYear.html">新增年份</a>
-                </nav>
-                <div class="me-3 ">
-                    <p class="lead text-light m-0">年份：2025</p>
-                </div>
-            </div>
-        </header>
+        {% include 'dashboard_navbar.html' %}
         <main class="mt-5 pt-3">
             <div class="container">
                 <div class="text-start my-3">
