@@ -3,10 +3,11 @@ from django.http import HttpResponse
 from django.contrib.auth.models import User, auth
 from django.contrib import messages
 from .auth_utils import std_authenticate, std_login, std_logout, get_student
-import zipfile, csv, shutil
+import zipfile, csv, shutil, os
 from django.core.files.storage import FileSystemStorage
 from django.db import connection
-from .models import Student, AdminSetting
+from .models import Student, Section, Volunteer, Course, AdminSetting
+import pandas as pd
 
 
 # Create your views here.
@@ -68,38 +69,35 @@ def newYear(request):
     db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
     return render(request, 'newYear.html', {'db_name': db_name})
 
-
 def upload_zip(request):
-    valid_files = {'volunteer.csv', 'course.csv', 'section.csv', 'student.csv'}
-    extracted_files = set()
+    valid_files = {'db_import.xlsx'}
     if request.method == 'POST' and request.FILES.get('uploadZip'):
-        zip_file = request.FILES['uploadZip'] 
+        zip_file = request.FILES['uploadZip']
         fs = FileSystemStorage()
-        filename = fs.save(zip_file.name, zip_file)
-        file_path = fs.path(filename)
-        zip_folder = f"{fs.location}/{filename.split('.')[0]}/"
-        print("filepath:" + file_path)
-        print("zip_folder:" + zip_folder)
-        print("filename:" + filename)
-
-        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-            zip_ref.extractall(fs.location)
+        zip_filename = fs.save(zip_file.name, zip_file)
+        extract_folder = fs.location + '/'
+        folder_name = str(zip_file).split('.')[0] + '/'
+        zip_path = fs.path(zip_filename)
+        path = fs.location + '/' + folder_name
+        
+        # Extract the zip file into the folder
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_folder)
             extracted_files = {file.split('/')[-1] for file in zip_ref.namelist()}
-            print(extracted_files)
-
+        
         if extracted_files.isdisjoint(valid_files):
-            shutil.rmtree(zip_folder, ignore_errors=False)
-            fs.delete(filename)
+            shutil.rmtree(extract_folder, ignore_errors=False)
+            fs.delete(zip_filename)
             messages.error(request, '請依照檔名與格式要求上傳')
-            print('invalid files')
             return redirect('newYear')
-
-        for file_name in extracted_files:
-            if file_name == 'student.csv':
-                with open(zip_folder + file_name, 'r') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
+        
+        if 'db_import.xlsx' in extracted_files:
+            dfs = pd.read_excel(os.path.join(path, 'db_import.xlsx'), sheet_name=None)
+            for sheet_name, df in dfs.items():
+                if sheet_name == 'student':
+                    for _, row in df.iterrows():
                         student_instance, created = Student.objects.get_or_create(std_id=row['std_id'])
+                        print(row)
                         student_instance.std_id = row['std_id']
                         student_instance.std_name = row['std_name']
                         student_instance.team = row['team']
@@ -107,44 +105,45 @@ def upload_zip(request):
                         student_instance.j_or_h = row['j_or_h'].upper()
                         student_instance.std_tag = row.get('std_tag', '')
                         student_instance.save()
-                        print('student' + student_instance.std_id + 'saved')
-            elif file_name == 'section.csv':
-                with open(fs.path(file_name), 'r') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
+                elif sheet_name == 'section':
+                    for _, row in df.iterrows():
+                        print(row)
                         section_instance, created = Section.objects.get_or_create(section_id=row['section_id'])
                         section_instance.section_id = row['section_id']
                         section_instance.section_time = row['section_time']
                         section_instance.save()
-                        print('section' + section_instance.section_id + 'saved')
-
-            elif file_name == 'volunteer.csv':
-                with open(fs.path(file_name), 'r') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        volunteer_instance, created = Section.objects.get_or_create(volunteer_id=row['volunteer_id'])
-                        volunteer_instance.volunteer_id=row['volunteer_id']
-                        volunteer_instance.camp_name=row['camp_name']
+                elif sheet_name == 'volunteer':
+                    for _, row in df.iterrows():
+                        print(row)
+                        volunteer_instance, created = Volunteer.objects.get_or_create(volunteer_id=row['volunteer_id'])
+                        volunteer_instance.volunteer_id = row['volunteer_id']
+                        volunteer_instance.camp_name = row['camp_name']
                         volunteer_instance.save()
-                        print('volunteer' + volunteer_instance.volunteer_id + 'saved')
-            elif file_name == 'course.csv':
-                with open(fs.path(file_name), 'r') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
+                elif sheet_name == 'course':
+                    for _, row in df.iterrows():
+                        print(row)
                         course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
-                        course_instance.course_id=row['course_id']
-                        course_instance.course_name=row['course_name']
-                        course_instance.course_info=row['course_info']
-                        course_instance.std_limit=row['std.limit']
-                        course_instance.course_type=row['course_type']
-                        course_instance.section=row.get('section_id')
+                        course_instance.course_id = row['course_id']
+                        course_instance.course_name = row['course_name']
+                        course_instance.course_info = row['course_info']
+                        course_instance.std_limit = 25 if pd.isna(row['std_limit']) else row['std_limit']
+                        course_instance.course_type = row['course_type']
+                        # Retrieve the Section instance
+                        section_id = row.get('section_id')
+                        if section_id:
+                            section_instance = Section.objects.get(section_id=section_id)
+                            course_instance.section = section_instance
                         course_instance.save()
-                        print('course' + course_instance.course_id + 'saved')
-   
+        # Cleanup: Remove the zip file and extracted folder
+        os.remove(zip_path)
+        shutil.rmtree(extract_folder)
         messages.success(request, 'Upload successful!')
-        print('success')
         return redirect('newYear')
     return redirect('newYear')
+
+            
+
+
 
 
 

@@ -33,10 +33,10 @@ class Student(models.Model):
         'H2' : '第二次選課｜高中部'
     }
     std_id = models.IntegerField(primary_key=True)
-    std_name = models.CharField(max_length=10)
-    team = models.IntegerField(choices=TEAM_CHOICES)
-    satb = models.CharField(max_length=1, choices=[('S', 'S'), ('A', 'A'), ('T', 'T'), ('B', 'B')])
-    j_or_h = models.CharField(max_length=1, choices=J_OR_H_CHOICES)
+    std_name = models.CharField(max_length=10, null=True)
+    team = models.IntegerField(choices=TEAM_CHOICES, null=True)
+    satb = models.CharField(max_length=1, choices=[('S', 'S'), ('A', 'A'), ('T', 'T'), ('B', 'B')], null=True)
+    j_or_h = models.CharField(max_length=1, choices=J_OR_H_CHOICES, null=True)
     std_tag = models.CharField(max_length=15, blank=True, null=True)
     def __str__(self):
         return self.std_name
@@ -49,7 +49,7 @@ class Volunteer(models.Model):
     profile_pic = models.CharField(max_length=255, blank=True, null=True)
 
 class Section(models.Model):
-    section_id = models.IntegerField(primary_key=True)
+    section_id = models.AutoField(primary_key=True)
     section_time = models.CharField(max_length=30)
 
     def __str__(self):
@@ -57,11 +57,11 @@ class Section(models.Model):
 
 class Course(models.Model):
     course_id = models.AutoField(primary_key=True)
-    course_name = models.CharField(max_length=50)
-    course_info = models.CharField(max_length=255, blank=True, null=True)
+    course_name = models.CharField(max_length=255)
+    course_info = models.TextField(max_length=255, blank=True, null=True)
     std_limit = models.IntegerField(default=25)
     course_type = models.CharField(max_length=2)
-    section = models.ForeignKey(Section, on_delete=models.CASCADE)
+    section = models.ForeignKey(Section, on_delete=models.CASCADE, null=True)
 
     def __str__(self):
         return self.course_name
