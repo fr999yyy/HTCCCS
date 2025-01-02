@@ -70,57 +70,82 @@ def newYear(request):
 
 
 def upload_zip(request):
-    valid_files = {'學員.csv', '課程.csv'}
+    valid_files = {'volunteer.csv', 'course.csv', 'section.csv', 'student.csv'}
     extracted_files = set()
     if request.method == 'POST' and request.FILES.get('uploadZip'):
         zip_file = request.FILES['uploadZip'] 
         fs = FileSystemStorage()
         filename = fs.save(zip_file.name, zip_file)
         file_path = fs.path(filename)
+        zip_folder = f"{fs.location}/{filename.split('.')[0]}/"
         print("filepath:" + file_path)
+        print("zip_folder:" + zip_folder)
         print("filename:" + filename)
 
         with zipfile.ZipFile(file_path, 'r') as zip_ref:
             zip_ref.extractall(fs.location)
-            extracted_files = set(zip_ref.namelist())
+            extracted_files = {file.split('/')[-1] for file in zip_ref.namelist()}
+            print(extracted_files)
 
-        if not extracted_files.issubset(valid_files):
-            shutil.rmtree(file_path.replace('.zip', ''), ignore_errors=False)
+        if extracted_files.isdisjoint(valid_files):
+            shutil.rmtree(zip_folder, ignore_errors=False)
             fs.delete(filename)
             messages.error(request, '請依照檔名與格式要求上傳')
             print('invalid files')
             return redirect('newYear')
 
         for file_name in extracted_files:
-            if file_name == '學員.csv':
+            if file_name == 'student.csv':
+                with open(zip_folder + file_name, 'r') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        student_instance, created = Student.objects.get_or_create(std_id=row['std_id'])
+                        student_instance.std_id = row['std_id']
+                        student_instance.std_name = row['std_name']
+                        student_instance.team = row['team']
+                        student_instance.satb = row['satb'].upper()
+                        student_instance.j_or_h = row['j_or_h'].upper()
+                        student_instance.std_tag = row.get('std_tag', '')
+                        student_instance.save()
+                        print('student' + student_instance.std_id + 'saved')
+            elif file_name == 'section.csv':
                 with open(fs.path(file_name), 'r') as csvfile:
                     reader = csv.DictReader(csvfile)
                     for row in reader:
-                        Student.objects.create(
-                            std_id=row['std_id'],
-                            std_name=row['std_name'],
-                            team=row['team'],
-                            satb=row['satb'],
-                            j_or_h=row['j_or_h'],
-                            std_tag=row.get('std_tag', '')
-                        )
-            elif file_name == '課程.csv':
-                with open(fs.path(file_name), 'r') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        Student.objects.create(
-                            std_id=row['std_id'],
-                            std_name=row['std_name'],
-                            team=row['team'],
-                            satb=row['satb'],
-                            j_or_h=row['j_or_h'],
-                            std_tag=row.get('std_tag', '')
-                        )
+                        section_instance, created = Section.objects.get_or_create(section_id=row['section_id'])
+                        section_instance.section_id = row['section_id']
+                        section_instance.section_time = row['section_time']
+                        section_instance.save()
+                        print('section' + section_instance.section_id + 'saved')
 
+            elif file_name == 'volunteer.csv':
+                with open(fs.path(file_name), 'r') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        volunteer_instance, created = Section.objects.get_or_create(volunteer_id=row['volunteer_id'])
+                        volunteer_instance.volunteer_id=row['volunteer_id']
+                        volunteer_instance.camp_name=row['camp_name']
+                        volunteer_instance.save()
+                        print('volunteer' + volunteer_instance.volunteer_id + 'saved')
+            elif file_name == 'course.csv':
+                with open(fs.path(file_name), 'r') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
+                        course_instance.course_id=row['course_id']
+                        course_instance.course_name=row['course_name']
+                        course_instance.course_info=row['course_info']
+                        course_instance.std_limit=row['std.limit']
+                        course_instance.course_type=row['course_type']
+                        course_instance.section=row.get('section_id')
+                        course_instance.save()
+                        print('course' + course_instance.course_id + 'saved')
+   
         messages.success(request, 'Upload successful!')
         print('success')
         return redirect('newYear')
     return redirect('newYear')
+
 
 
 def stdLogout(request):

@@ -43,6 +43,34 @@ class Student(models.Model):
     def get_j_or_h(self):
         return self.dict(J_OR_H_CHOICES).get(j_or_h)
 
+class Volunteer(models.Model):
+    volunteer_id = models.AutoField(primary_key=True)
+    camp_name = models.CharField(max_length=15, blank=True, null=True)
+    profile_pic = models.CharField(max_length=255, blank=True, null=True)
+
+class Section(models.Model):
+    section_id = models.IntegerField(primary_key=True)
+    section_time = models.CharField(max_length=30)
+
+    def __str__(self):
+        return f"Section {self.section_id}: {self.section_time}"
+
+class Course(models.Model):
+    course_id = models.AutoField(primary_key=True)
+    course_name = models.CharField(max_length=50)
+    course_info = models.CharField(max_length=255, blank=True, null=True)
+    std_limit = models.IntegerField(default=25)
+    course_type = models.CharField(max_length=2)
+    section = models.ForeignKey(Section, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.course_name
+
+class Selection(models.Model):
+    priority = models.IntegerField()
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+
 
 class AdminSetting(models.Model):
     setting_name = models.CharField(max_length=50, primary_key=True)
