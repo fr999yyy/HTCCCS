@@ -11,5 +11,6 @@ urlpatterns = [
     path('dashboard/result', views.result, name='result'),
     path('upload_zip', views.upload_zip, name='upload_zip'),
     path('pSel', views.pSel, name='pSel'),
+    path('pSel/check_decision', views.check_decision, name='check_decision'),
     path('stdLogout', views.stdLogout, name='stdLogout'),
 ]

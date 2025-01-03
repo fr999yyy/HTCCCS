@@ -127,29 +127,20 @@ def upload_zip(request):
                         course_instance.course_name = row['course_name']
                         course_instance.course_info = row['course_info']
                         course_instance.std_limit = 25 if pd.isna(row['std_limit']) else row['std_limit']
-                        course_instance.course_type = row['course_type']
+                        course_instance.course_type = row['course_type'].upper()
                         # Retrieve the Section instance
                         section_id = row.get('section_id')
                         if section_id:
                             section_instance = Section.objects.get(section_id=section_id)
-                            course_instance.section = section_instance
+                            course_instance.section = section_instance.section_id
                         course_instance.save()
         # Cleanup: Remove the zip file and extracted folder
         os.remove(zip_path)
-        shutil.rmtree(extract_folder)
-        messages.success(request, 'Upload successful!')
+        shutil.rmtree(path)
+        messages.success(request, '資料匯入已完成')
         return redirect('newYear')
     return redirect('newYear')
 
-            
-
-
-
-
-
-def stdLogout(request):
-    std_logout(request)
-    return redirect('/stdLogin')
 
 def pSel(request):
     if request.session.has_key('std_id'):
@@ -157,16 +148,51 @@ def pSel(request):
         team = request.session['team']
         student_instance = Student.objects.get(std_id=std_id)
         team_display = Student.TEAM_CHOICES[team-1][1]
-        formType = student_instance.j_or_h + str(AdminSetting.objects.get(setting_name='SelectionStage').configuration)
-        form_display = dict(Student.FORM_DISPLAY)[formType]
-        student = {
-            'std_id': std_id , 
-            'team_display': team_display, 
-            'form_display': form_display,
-            'std_name': student_instance.std_name,
-            'formType': formType
-            }  
-        return render(request, 'pSel.html', {'student': student})
+        formType = student_instance.j_or_h + str(AdminSetting.objects.get(setting_name='SelectionStage').configuration) #returning J1, J2, H1, H2
+        form_display = dict(Student.FORM_DISPLAY)[formType] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
+        selection_range = AdminSetting.objects.get(setting_name= student_instance.j_or_h + '1stRange').configuration
+        section_instance = Section.objects.filter(section_id__lte=selection_range)
+        course_instance = Course.objects.filter(section_id__lte=selection_range).filter(course_type__in=[student_instance.j_or_h, 'M']) # 選擇對應國/高中部的課程以及國高混合課程
+        
+        sections_with_courses = [] # list中插入dict用來分開儲存每一個節次對應的所有課程，以及課程數量，用來顯示志願選項數量
+        for section in section_instance:
+            courses_in_section = []
+            for course in course_instance.filter(section_id=section.section_id):
+                if '_' in course.course_name:
+                    if '、' in course.course_name:
+                        teachers =  course.course_name.split('_')[1].split('、') 
+                    else:
+                        teachers = [course.course_name.split('_')[1]]
+                else: teachers = []
+                print("老師："+str(teachers))
+                
+                courses_in_section.append({
+                    'course': course,
+                    'course_name': course.course_name,
+                    'teachers': teachers
+                })
+            num_courses = ''.join(str(i) for i in range(1, len(courses_in_section)))  
+            # 假如此節次有三個課程，則num_courses = '123' 結合makelist 解決 django template 無法使用range的問題
+            sections_with_courses.append({
+                'section': section,
+                'courses': courses_in_section,
+                'num_courses': num_courses
+            })
+            student = {
+                'std_id': std_id , 
+                'team_display': team_display, 
+                'form_display': form_display,
+                'std_name': student_instance.std_name
+                }  
+        return render(request, 'pSel.html', {'student': student, 'section_instance': section_instance, 'course_instance': course_instance, 'sections_with_courses': sections_with_courses})
     else:
         return redirect('/stdLogin')
     pass
+
+def check_decision(request):
+    return render(request, 'check_decision.html')
+
+
+def stdLogout(request):
+    std_logout(request)
+    return redirect('/stdLogin')

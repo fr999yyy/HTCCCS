@@ -49,8 +49,28 @@ class Volunteer(models.Model):
     profile_pic = models.CharField(max_length=255, blank=True, null=True)
 
 class Section(models.Model):
+    # 原本用於節次顯示，用節次時段表中的section_disply取代
+    # SECTION_CHOICES = [
+    #     ('1', '第一節'),
+    #     ('2', '第二節'),
+    #     ('3', '第三節'),
+    #     ('4', '第四節'),
+    #     ('5', '第五節'),
+    #     ('6', '第六節'),
+    #     ('7', '第七節'),
+    #     ('8', '第八節'),
+    #     ('9', '第九節'),
+    #     ('10', '第十節'),
+    #     ('11', '第十一節'),
+    #     ('12', '第十二節'),
+    #     ('13', '第十三節'),
+    #     ('14', '第十四節'),
+    #     ('15', '第十五節'),
+    # ]
+
     section_id = models.AutoField(primary_key=True)
     section_time = models.CharField(max_length=30)
+    section_display = models.CharField(max_length=30, default='')
 
     def __str__(self):
         return f"Section {self.section_id}: {self.section_time}"
@@ -61,15 +81,16 @@ class Course(models.Model):
     course_info = models.TextField(max_length=255, blank=True, null=True)
     std_limit = models.IntegerField(default=25)
     course_type = models.CharField(max_length=2)
-    section = models.ForeignKey(Section, on_delete=models.CASCADE, null=True)
+    section_id = models.ForeignKey(Section, on_delete=models.CASCADE, null=True)
 
     def __str__(self):
         return self.course_name
 
 class Selection(models.Model):
     priority = models.IntegerField()
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    student_id = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course_id = models.ForeignKey(Course, on_delete=models.CASCADE)
+
 
 
 class AdminSetting(models.Model):

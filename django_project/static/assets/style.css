@@ -43,7 +43,19 @@ margin:70px;
     height: 80px;
 }
 
-.info {
+/* .info {
     padding-right: 100px;
-}
+} */
 
+.image1 {
+    position: absolute !important; 
+    top: 0 !important; 
+    left: 0 !important; 
+  }
+  
+.image2 {
+position: absolute !important; 
+top: 50% !important; /* Adjust as needed */ 
+left: 50% !important; /* Adjust as needed */ 
+transform: translate(-50%, -50%) !important; /* Center image2 */ 
+}
