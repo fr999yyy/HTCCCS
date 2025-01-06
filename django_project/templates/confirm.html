@@ -1,0 +1,77 @@
+{% load static %}
+{% load filters %}
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>{{ student.form_display }}</title>
+        <!-- Required meta tags -->
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <link rel="stylesheet" href="{% static 'style.css' %}">
+        <!-- Bootstrap CSS v5.2.1 -->
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+            rel="stylesheet"
+            integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+            crossorigin="anonymous"
+        />
+    </head>
+
+    <body>
+        {% include 'std_navbar.html' %}
+        <main class="mt-5 pt-5">
+            <div class="container">
+                <div class="text-center my-4">
+                    <h1 class="display-6">確認志願</h1>
+                </div> 
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <table class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="col small">志願</th>
+                                    {% for section_display in table_data.keys %}
+                                        <th scope="col" class="col">{{ section_display }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for priority in sorted_priorities %}
+                                    <tr>
+                                        <td scope="row" class="fw-bold">#{{ priority }}</td>
+                                        {% for section_display in table_data.keys %}
+                                        <td>{{ table_data|get_item:section_display|get_item:priority|default_if_none:"" }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                </div>
+                <div class="text-center mt-5">
+                    <a
+                        name=""
+                        id="pNext"
+                        class="btn btn-primary"
+                        href="{% url 'submit_form' %}"
+                        role="button"
+                        >沒有填錯！送出！</a>
+                </div>
+            </div>
+        </main>
+        <footer>
+            <!-- place footer here -->
+        </footer>
+        <!-- Bootstrap JavaScript Libraries -->
+        <script
+            src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+            integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"
+            integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+"
+            crossorigin="anonymous"
+        ></script>
+    </body>
+</html>

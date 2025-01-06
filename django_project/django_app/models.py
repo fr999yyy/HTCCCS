@@ -88,8 +88,9 @@ class Course(models.Model):
 
 class Selection(models.Model):
     priority = models.IntegerField()
-    student_id = models.ForeignKey(Student, on_delete=models.CASCADE)
+    std_id = models.ForeignKey(Student, on_delete=models.CASCADE)
     course_id = models.ForeignKey(Course, on_delete=models.CASCADE)
+    section_id = models.ForeignKey(Section, on_delete=models.CASCADE)
 
 
 

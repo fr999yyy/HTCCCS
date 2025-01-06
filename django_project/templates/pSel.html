@@ -17,80 +17,41 @@
             crossorigin="anonymous"
         />
         <link rel="stylesheet" href="{% static 'style.css' %}">
-
     </head>
 
     <body>
         {% include 'std_navbar.html' %}
+        <div class="d-none" id="stdId">{{ student.std_id }}</div>
         <main class="mt-5 pt-5">
-            <div class="container">
+            <form method="POST" action="{% url 'double_check' %}" class="container" id="priorityForm">
+                {% csrf_token %}
                 <div class="text-center my-4">
                     <h1 class="display-6">志願選填</h1>
                 </div> 
-                    <nav>
-                        <div class="nav nav-tabs justify-content-center" id="sectionTab" role="tablist">
-                            <!-- 用js調整顯示的節次數量 -->
-                            <button class="nav-link active" id="section-{{ section }}-tab" data-bs-toggle="tab" data-bs-target="#section{{ section }}" type="button" role="tab">{{ section_instance.section_display }}</button>
-                            {% for section_with_courses in section_with_courses %}
-                                {% if forloop.first %}
-                                    <button class="nav-link active" id="section-{{ section }}-tab" data-bs-toggle="tab" data-bs-target="#section{{ section }}" type="button" role="tab">{{ section_instance.section_display }}</button>
-                                {% else %}
-                                    <button class="nav-link" id="section-{{ section }}-tab" data-bs-toggle="tab" data-bs-target="#section{{ section }}" type="button" role="tab">{{ section_instance.section_display }}</button>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                    </nav>
-
-                    <div class="tab-content align-self-start" id="section-tabContent">
-                        <!-- 第五節範例 -->
-                        {% for section_with_courses in sections_with_courses %}
-                        <div class="tab-pane fade p-3" id="section{{ section_with_courses.section.section_id }}" role="tabpanel"> 
-                            <h2 id="sectionTime" class="text-center mb-3">{{ section_with_courses.section.section_time }}</h2>
-                            <ul class="list-group">
-                                {% for course_info in section_with_courses.courses %}
-                                    <li class="list-group-item">
-                                        <div class="d-flex align-items-center">
-                                            <select class="form-select form-select-sm text-center" name="" id="" style="width:auto;">
-                                                <option selected>選擇志願</option>
-                                                {% for i in section_with_courses.num_courses|make_list %}
-                                                    <option value="{{ i }}">{{ i }}</option>
-                                                {% endfor %}
-                                            </select>
-                                            <div id="className" class="lead fw-bold mx-2">{{ course_info.course_name }}</div>
-                                            <button class="btn btn-secondary ms-auto me-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ course_info.course.course_id }}" aria-expanded="false" aria-controls="collapse{{ course_info.course.course_id }}">詳細資訊</button>
-                                        </div>
-                                        <div class="collapse" id="collapse{{ course_info.course.course_id }}">
-                                            <div class="bg-light bg-gradient card card-body border-0 d-flex flex-row align-items-start justify-content-between mt-1">
-                                                <div id="classInfo{{ course_info.course_id }}" class="info">{{ course_info.course.course_info }}</div>
-                                                <div class="ms-4 text-end" style="width: 180px;">
-                                                    {% for teacher in course_info.teachers %}
-                                                    <img src="assets/{{ teacher }}.jpg" class="rounded-circle profile mx-3" alt="" id="pfp_{{ teacher} }" />
-                                                    {% endfor %}                              
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% endfor %}
+                <nav>
+                    <div class="nav nav-tabs justify-content-center" id="sectionTab" role="tablist">
+                        <!-- Buttons will be dynamically added here -->
                     </div>
+                </nav>
+                <div class="tab-content align-self-start" id="section-tabContent">
+                    <!-- Tab panes will be dynamically added here -->
                 </div>
                 <div class="text-center">
-                    <p class="text-danger">志願序不得重複！</p>
+                    <p class="text-danger" id="error-message"></p>
                     <button
                     type="submit"
-                    name="check_decision"
-                    id="stdLogin"
-                    class="btn btn-primary"
+                    name="double_check"
+                    id="submitBtn"
+                    class="btn btn-lg btn-primary m-3 p-2"
                     >下一步</button>
                 </div>
-            </div>
+            </form>
         </main>
         <footer>
             <!-- place footer here -->
         </footer>
         <!-- Bootstrap JavaScript Libraries -->
+        <script src="{% static 'pSel.js' %}"></script>
         <script
             src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
             integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
