@@ -19,19 +19,30 @@ def index(request):
 
 def stdLogin(request):
     if request.method == 'POST':
+        if request.session.has_key('std_id'):
+            return redirect('/pSel')
         if not request.POST['std_id'] or not request.POST['team'] or not request.POST['satb']:
             messages.error(request, '請填寫所有欄位')
             return redirect('/stdLogin')
         std_id = request.POST['std_id']
         team = request.POST['team']
         satb = request.POST['satb']
+        current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
         print(std_id, team, satb)
         student = std_authenticate(std_id=std_id, team=team, satb=satb)
+        student_instance = Student.objects.get(std_id=std_id)
+        if student_instance.form1_completed & (current_form == 1):
+            messages.error(request, '你已經選過課囉！')
+            return redirect('/stdLogin')
+        if student_instance.form2_completed & (current_form == 2):
+            messages.error(request, '你已經選過課囉！')
+            return redirect('/stdLogin')
+
 
         if student is not None:
             std_login(request, student)
             print('login success')
-            return redirect('/pSel')
+            return redirect ('/pSel')
         else:
             messages.info(request, '無法登入，請檢查資料是否正確')
             print('login failed')
@@ -40,6 +51,8 @@ def stdLogin(request):
         return render(request, 'stdLogin.html')
 
 def vLogin(request):
+    if request.user.is_authenticated:
+        return redirect('/dashboard')
     if request.method == 'POST':
         if not request.POST['password']:
             messages.error(request, '請輸入密碼')
@@ -103,7 +116,7 @@ def upload_zip(request):
                 if sheet_name == 'student':
                     for _, row in df.iterrows():
                         student_instance, created = Student.objects.get_or_create(std_id=row['std_id'])
-                        print(row)
+                        # print(row)
                         student_instance.std_id = row['std_id']
                         student_instance.std_name = row['std_name']
                         student_instance.team = row['team']
@@ -113,7 +126,7 @@ def upload_zip(request):
                         student_instance.save()
                 elif sheet_name == 'section':
                     for _, row in df.iterrows():
-                        print(row)
+                        # print(row)
                         section_instance, created = Section.objects.get_or_create(section_id=row['section_id'])
                         section_instance.section_id = row['section_id']
                         section_instance.section_time = row['section_time']
@@ -121,14 +134,14 @@ def upload_zip(request):
                         section_instance.save()
                 elif sheet_name == 'volunteer':
                     for _, row in df.iterrows():
-                        print(row)
+                        # print(row)
                         volunteer_instance, created = Volunteer.objects.get_or_create(volunteer_id=row['volunteer_id'])
                         volunteer_instance.volunteer_id = row['volunteer_id']
                         volunteer_instance.camp_name = row['camp_name']
                         volunteer_instance.save()
                 elif sheet_name == 'course':
                     for _, row in df.iterrows():
-                        print(row)
+                        # print(row)
                         course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
                         course_instance.course_id = row['course_id']
                         course_instance.course_name = row['course_name']
@@ -155,8 +168,9 @@ def pSel(request):
         team = request.session['team']
         student_instance = Student.objects.get(std_id=std_id)
         team_display = Student.TEAM_CHOICES[team-1][1]
-        formType = student_instance.j_or_h + str(AdminSetting.objects.get(setting_name='SelectionStage').configuration) #returning J1, J2, H1, H2
-        form_display = dict(Student.FORM_DISPLAY)[formType] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
+        current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+        form_type = student_instance.j_or_h + str(current_form) #returning J1, J2, H1, H2
+        form_display = dict(Student.FORM_DISPLAY)[form_type] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
         
         student = {
             'std_id': std_id,
@@ -166,6 +180,7 @@ def pSel(request):
         }
         request.session['team_display'] = team_display
         request.session['form_display'] = form_display
+        request.session['current_form'] = current_form
         return render(request, 'pSel.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
     else:
         return redirect('/stdLogin')
@@ -177,22 +192,39 @@ def get_courses(request):
     selection_range = AdminSetting.objects.get(setting_name=student_instance.j_or_h + '1stRange').configuration
     section_instances = Section.objects.filter(section_id__lte=selection_range)
     course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
+    
+    filtered_courses = {}
+    for course in course_instances:
+        section_id = course.section_id
+        if section_id not in filtered_courses:
+            filtered_courses[section_id] = course
+        else:
+            existing_course = filtered_courses[section_id]
+            if 'js' in course.course_type or 'hs' in course.course_type:
+                filtered_courses[section_id] = course
+            elif 'js' not in existing_course.course_type and 'hs' not in existing_course.course_type:
+                filtered_courses[section_id] = course
+
+    course_instances = filtered_courses
 
     sections_with_courses = [] # list中插入dict用來分開儲存每一個節次對應的所有課程，以及課程數量，用來顯示志願選項數量
     for section in section_instances:
         courses_in_section = []
-        for course in course_instances.filter(section_id=section.section_id):
-            if '_' in course.course_name:
-                if '、' in course.course_name:
+        for course in course_instances.values():
+            if course.section_id == section.section_id:
+                course_name = course.course_name
+                printf("課程名稱："+str(course_name))
+            if '_' in course_name:
+                if '、' in course_name:
                     teachers =  course.course_name.split('_')[1].split('、') 
                 else:
-                    teachers = [course.course_name.split('_')[1]]
+                    teachers = [course_name.split('_')[1]]
             else: teachers = []
-            print("老師："+str(teachers))
+            # print("老師："+str(teachers))
             courses_in_section.append({
-                'course_id': course.course_id,
-                'course_name': course.course_name,
-                'course_info': course.course_info,
+                'course_id': course.get("course_id"),
+                'course_name': course.get("course_name"),
+                'course_info': course.get("course_info"),
                 'teachers': teachers
             })
         num_courses = len(courses_in_section)
@@ -216,7 +248,7 @@ def double_check(request): # merge with confirm
         std_id = request.session['std_id']
         # Temporarily save the user's choices in the session
         request.session['selections'] = selections
-        print('selections:', selections)
+        # print('selections:', selections)
         return redirect('confirm')
 
     return redirect('pSel')
@@ -240,8 +272,6 @@ def confirm(request):
             table_data[section.section_display] = {}
         table_data[section.section_display][priority] = course.course_name
         priorities.add(priority)
-        for section_display in table_data.keys():
-            print(table_data[section_display][priority] if priority in table_data[section_display] else 'N/A')
 
 
     # Sort priorities
@@ -275,6 +305,19 @@ def submit_form(request):
     return redirect('success')  # Redirect to a success page or another appropriate page
 
 def success(request):
+    std_id = request.session['std_id']
+    student = Student.objects.get(std_id=std_id)
+    current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+
+
+    if curren_form == '1':
+        student.form1_completed = True
+        print('form1 completed')
+    elif current_form == '2':
+        student.form2_completed = True
+        print('form1 completed')
+    # student.save() 測試先關掉
+    std_logout(request)
     return render(request, 'success.html')
 
 def stdLogout(request):

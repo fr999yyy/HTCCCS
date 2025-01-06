@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     priorities[section_id] = {};
                 }
                 if (priorities[section_id][priority]) {
-                    errorMessage.textContent = '同一節內志願序不得重複！';
+                    errorMessage.textContent = '同一節內志願序不得重複！（第'+section_id+'節）';
                     console.log('志願序不得重複！');
                     event.preventDefault();
                     return;

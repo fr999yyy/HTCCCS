@@ -38,8 +38,9 @@ class Student(models.Model):
     satb = models.CharField(max_length=1, choices=[('S', 'S'), ('A', 'A'), ('T', 'T'), ('B', 'B')], null=True)
     j_or_h = models.CharField(max_length=1, choices=J_OR_H_CHOICES, null=True)
     std_tag = models.CharField(max_length=15, blank=True, null=True)
-    def __str__(self):
-        return self.std_name
+    form1_completed = models.BooleanField(default=False)  # New field for 1st form completion
+    form2_completed = models.BooleanField(default=False)  # New field for 2nd form completion
+
     def get_j_or_h(self):
         return self.dict(J_OR_H_CHOICES).get(j_or_h)
 
