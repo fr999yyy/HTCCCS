@@ -101,14 +101,32 @@ def upload_zip(request):
         
         # Extract the zip file into the folder
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_folder)
+            for file in zip_ref.namelist():
+                # Decode the filename correctly
+                try:
+                    filename = file.encode('cp437').decode('utf-8')
+                except UnicodeDecodeError:
+                    filename = file.encode('utf-8').decode('utf-8')
+
+                print(filename)
+                zip_ref.extract(file, extract_folder)  # Extract the file
+                os.chdir(extract_folder)  # Change to the target directory
+
+                # Rename the file to the correctly decoded filename
+                if os.path.exists(file):
+                    os.rename(file, filename)
+
             extracted_files = {file.split('/')[-1] for file in zip_ref.namelist()}
+            print(extracted_files)
         
         if extracted_files.isdisjoint(valid_files):
-            shutil.rmtree(extract_folder, ignore_errors=False)
+            shutil.rmtree(path, ignore_errors=False)
             fs.delete(zip_filename)
             messages.error(request, '請依照檔名與格式要求上傳')
             return redirect('newYear')
+
+            # Move the 'pfp' folder to the media root
+
 
         if 'db_import.xlsx' in extracted_files:
             dfs = pd.read_excel(os.path.join(path, 'db_import.xlsx'), sheet_name=None)
