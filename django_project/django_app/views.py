@@ -80,13 +80,30 @@ def result(request):
     db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
     return render(request, 'result.html', {'db_name': db_name})
 
-def update(request):
+def updateData(request):
     db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
-    return render(request, 'update.html', {'db_name': db_name})
+    J1stSelRange = AdminSetting.objects.get(setting_name='J1stRange').configuration
+    H1stSelRange = AdminSetting.objects.get(setting_name='H1stRange').configuration
+    SelectionStage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+    return render(request, 'updateData.html', {
+        'db_name': db_name, 
+        'J1stSelRange': J1stSelRange, 
+        'H1stSelRange': H1stSelRange, 
+        'SelectionStage': SelectionStage
+        })
 
-def newYear(request):
-    db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
-    return render(request, 'newYear.html', {'db_name': db_name})
+def update_settings(request):
+    if request.method == 'POST':
+        J1stSelRange = request.POST['J1stSelRange']
+        H1stSelRange = request.POST['H1stSelRange']
+        SelectionStage = request.POST['SelectionStage']
+        print(J1stSelRange, H1stSelRange, SelectionStage)
+        AdminSetting.objects.filter(setting_name='J1stSelRange').update(configuration=str(J1stSelRange)) if J1stSelRange else None
+        AdminSetting.objects.filter(setting_name='H1stSelRange').update(configuration=str(H1stSelRange)) if H1stSelRange else None
+        AdminSetting.objects.filter(setting_name='SelectionStage').update(configuration=SelectionStage)
+        messages.success(request, '設定已更新')
+        return redirect('updateData')
+    return redirect('updateData')
 
 def upload_zip(request):
     valid_files = {'db_import.xlsx', 'pfp'}
@@ -123,7 +140,7 @@ def upload_zip(request):
             shutil.rmtree(path, ignore_errors=False)
             fs.delete(zip_filename)
             messages.error(request, '請依照檔名與格式要求上傳')
-            return redirect('newYear')
+            return redirect('updateData')
 
             # Move the 'pfp' folder to the media root
 
@@ -178,8 +195,8 @@ def upload_zip(request):
         os.remove(zip_path)
         # shutil.rmtree(path)
         messages.success(request, '資料匯入已完成')
-        return redirect('newYear')
-    return redirect('newYear')
+        return redirect('updateData')
+    return redirect('updateData')
 
 
 def pSel(request):
