@@ -6,7 +6,7 @@ from .auth_utils import std_authenticate, std_login, std_logout, get_student
 import zipfile, csv, shutil, os
 from django.core.files.storage import FileSystemStorage
 from django.db import connection
-from .models import Student, Section, Volunteer, Course, AdminSetting, Selection
+from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse
 import pandas as pd
 
 
@@ -18,9 +18,9 @@ def index(request):
     return render(request, 'index.html')
 
 def stdLogin(request):
-    if request.method == 'POST':
-        if request.session.has_key('std_id'):
+    if request.session.has_key('std_id'):
             return redirect('/pSel')
+    if request.method == 'POST':
         if not request.POST['std_id'] or not request.POST['team'] or not request.POST['satb']:
             messages.error(request, '請填寫所有欄位')
             return redirect('/stdLogin')
@@ -51,17 +51,17 @@ def stdLogin(request):
         return render(request, 'stdLogin.html')
 
 def vLogin(request):
-    if request.user.is_authenticated:
-        return redirect('/dashboard')
+    # if request.user.is_authenticated:
+    #     return redirect('/dashboard')
     if request.method == 'POST':
         if not request.POST['password']:
             messages.error(request, '請輸入密碼')
             return redirect('/vLogin')
         password = request.POST['password']
 
-        user = auth.authenticate(password=password)
+        user = auth.authenticate(username='admin', password=password)
 
-        if password is not None:
+        if user is not None:
             auth.login(request, user)
             return redirect('/dashboard')
         else:
@@ -89,7 +89,7 @@ def newYear(request):
     return render(request, 'newYear.html', {'db_name': db_name})
 
 def upload_zip(request):
-    valid_files = {'db_import.xlsx'}
+    valid_files = {'db_import.xlsx', 'pfp'}
     if request.method == 'POST' and request.FILES.get('uploadZip'):
         zip_file = request.FILES['uploadZip']
         fs = FileSystemStorage()
@@ -109,7 +109,7 @@ def upload_zip(request):
             fs.delete(zip_filename)
             messages.error(request, '請依照檔名與格式要求上傳')
             return redirect('newYear')
-        
+
         if 'db_import.xlsx' in extracted_files:
             dfs = pd.read_excel(os.path.join(path, 'db_import.xlsx'), sheet_name=None)
             for sheet_name, df in dfs.items():
@@ -142,21 +142,23 @@ def upload_zip(request):
                 elif sheet_name == 'course':
                     for _, row in df.iterrows():
                         # print(row)
-                        course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
+                        if row['course_type'] == 'js' or row['course_type'] == 'hs':
+                            course_instance, created = SpecialCourse.objects.get_or_create(course_id=row['course_id'])
+                            course_instance.std_limit = 99 if pd.isna(row['std_limit']) else row['std_limit']
+                        else:
+                            course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
+                            course_instance.std_limit = 25 if pd.isna(row['std_limit']) else row['std_limit']
                         course_instance.course_id = row['course_id']
                         course_instance.course_name = row['course_name']
                         course_instance.course_info = row['course_info'] if pd.notna(row['course_info']) else '無課程資訊'
-                        course_instance.std_limit = 25 if pd.isna(row['std_limit']) else row['std_limit']
                         course_instance.course_type = row['course_type'].upper()
                         # Retrieve the Section instance
                         section_id = row.get('section_id')
-                        if section_id:
-                            section_instance = Section.objects.get(section_id=section_id)
-                            course_instance.section = section_instance.section_id
+                        course_instance.section_id = Section.objects.get(section_id=section_id)
                         course_instance.save()
         # Cleanup: Remove the zip file and extracted folder
         os.remove(zip_path)
-        shutil.rmtree(path)
+        # shutil.rmtree(path)
         messages.success(request, '資料匯入已完成')
         return redirect('newYear')
     return redirect('newYear')
@@ -192,41 +194,42 @@ def get_courses(request):
     selection_range = AdminSetting.objects.get(setting_name=student_instance.j_or_h + '1stRange').configuration
     section_instances = Section.objects.filter(section_id__lte=selection_range)
     course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
+    sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
     
-    filtered_courses = {}
-    for course in course_instances:
-        section_id = course.section_id
-        if section_id not in filtered_courses:
-            filtered_courses[section_id] = course
-        else:
-            existing_course = filtered_courses[section_id]
-            if 'js' in course.course_type or 'hs' in course.course_type:
-                filtered_courses[section_id] = course
-            elif 'js' not in existing_course.course_type and 'hs' not in existing_course.course_type:
-                filtered_courses[section_id] = course
-
-    course_instances = filtered_courses
-
     sections_with_courses = [] # list中插入dict用來分開儲存每一個節次對應的所有課程，以及課程數量，用來顯示志願選項數量
     for section in section_instances:
         courses_in_section = []
-        for course in course_instances.values():
-            if course.section_id == section.section_id:
-                course_name = course.course_name
-                printf("課程名稱："+str(course_name))
-            if '_' in course_name:
-                if '、' in course_name:
-                    teachers =  course.course_name.split('_')[1].split('、') 
-                else:
-                    teachers = [course_name.split('_')[1]]
-            else: teachers = []
-            # print("老師："+str(teachers))
-            courses_in_section.append({
-                'course_id': course.get("course_id"),
-                'course_name': course.get("course_name"),
-                'course_info': course.get("course_info"),
-                'teachers': teachers
-            })
+        sp_courses_in_section = sp_course_instances.filter(section_id=section.section_id)
+        if sp_courses_in_section.exists():
+            for course in sp_courses_in_section:
+                if '_' in course.course_name:
+                    if '、' in course.course_name:
+                        teachers =  course.course_name.split('_')[1].split('、') 
+                    else:
+                        teachers = [course.course_name.split('_')[1]]
+                else: teachers = []
+                print("老師："+str(teachers))
+                courses_in_section.append({
+                    'course_id': course.course_id,
+                    'course_name': course.course_name,
+                    'course_info': course.course_info,
+                    'teachers': teachers
+                })
+        else:
+            for course in course_instances.filter(section_id=section.section_id):
+                if '_' in course.course_name:
+                    if '、' in course.course_name:
+                        teachers =  course.course_name.split('_')[1].split('、') 
+                    else:
+                        teachers = [course.course_name.split('_')[1]]
+                else: teachers = []
+                print("老師："+str(teachers))
+                courses_in_section.append({
+                    'course_id': course.course_id,
+                    'course_name': course.course_name,
+                    'course_info': course.course_info,
+                    'teachers': teachers
+                })
         num_courses = len(courses_in_section)
         sections_with_courses.append({
             'section_id': section.section_id,
@@ -266,7 +269,10 @@ def confirm(request):
 
     for selection in selections:
         priority, course_id, std_id, section_id = selection.split('-')
-        course = Course.objects.get(course_id=course_id)
+        if SpecialCourse.objects.filter(course_id=course_id).exists():
+            course = SpecialCourse.objects.get(course_id=course_id)
+        else:
+            course = Course.objects.get(course_id=course_id)
         section = Section.objects.get(section_id=section_id)
         if section.section_display not in table_data:
             table_data[section.section_display] = {}
@@ -293,10 +299,15 @@ def submit_form(request):
     for selection in selections:
         priority, course_id, std_id, section_id = selection.split('-')
 
+        if SpecialCourse.objects.filter(course_id=course_id).exists():
+            course_instance = SpecialCourse.objects.get(course_id=course_id)
+        else:
+            course_instance = Course.objects.get(course_id=course_id)
+
         selection_instance = Selection.objects.create(
             priority=priority,
             std_id=Student.objects.get(std_id=std_id),
-            course_id=Course.objects.get(course_id=course_id),
+            course_id=course_instance.course_id,
             section_id=Section.objects.get(section_id=section_id)
         )
 
@@ -310,7 +321,7 @@ def success(request):
     current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
 
 
-    if curren_form == '1':
+    if current_form == '1':
         student.form1_completed = True
         print('form1 completed')
     elif current_form == '2':
