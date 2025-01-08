@@ -100,11 +100,16 @@ class SpecialCourse(models.Model):
 
 class Selection(models.Model):
     priority = models.IntegerField()
-    std_id = models.ForeignKey(Student, on_delete=models.CASCADE)
+    std = models.ForeignKey(Student, on_delete=models.CASCADE)
     course_id = models.CharField(max_length=50)
-    section_id = models.ForeignKey(Section, on_delete=models.CASCADE)
+    section = models.ForeignKey(Section, on_delete=models.CASCADE)
+    form_type = models.CharField(max_length=2, default='J1')
 
-
+class SelectionResult(models.Model):
+    std = models.ForeignKey(Student, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    section = models.ForeignKey(Section, on_delete=models.CASCADE)
+    form_type = models.CharField(max_length=2, default='J1')
 
 class AdminSetting(models.Model):
     setting_name = models.CharField(max_length=50, primary_key=True)

@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     teacherImages.style.width = '180px';
                     course.teachers.forEach(teacher => {
                         const img = document.createElement('img');
-                        img.src = `/media/pfp/${teacher}.jpg`; // 志工頭貼
+                        img.src = `/media/DBzip/pfp/${teacher}.jpg`; // 志工頭貼
                         img.className = 'rounded-circle profile ms-1';
                         img.alt = '';
                         teacherImages.appendChild(img);

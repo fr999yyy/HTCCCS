@@ -45,7 +45,7 @@
                     <div class="my-3 col-3">
                         <form method="POST" enctype="multipart/form-data" action="{% url 'upload_zip' %}">
                             {% csrf_token %}
-                            <label for="uploadZip" class="form-label">上傳資料壓縮檔</label>
+                            <label for="uploadZip" class="form-label">上傳資料壓縮檔（DBzip.zip）</label>
                             <input type="file" class="form-control" name="uploadZip" id="uploadZip" accept=".zip">
                             <button type="submit" class="btn btn-primary mt-3">上傳檔案</button>
                         </form>
@@ -53,28 +53,28 @@
                     <form method="POST" action=" {% url 'update_settings'%}" class="row my-3">
                         {% csrf_token %}
                         <div class="col-3 mt-3">
-                            <label for="J1stSelRange" class="form-label">第一次國中選課範圍</label>
+                            <label for="J1stRange" class="form-label">第一次國中選課範圍</label>
                             <div class="">
                                 <input
                                     type="text"
                                     class="form-control"
-                                    name="J1stSelRange"
+                                    name="J1stRange"
                                     id="JSelRange"
                                     aria-describedby="helpId"
-                                    placeholder="第一節～第{{ J1stSelRange }}節"
+                                    placeholder="第一節～第{{ J1stRange }}節"
                                 />
                             </div>
                         </div>
                         <div class="col-3 mt-3">
-                            <label for="H1stSelRange" class="form-label">第一次高中選課範圍</label>
+                            <label for="H1stRange" class="form-label">第一次高中選課範圍</label>
                             <div class="">
                                 <input
                                     type="text"
                                     class="form-control"
-                                    name="H1stSelRange"
+                                    name="H1stRange"
                                     id="HSelRange"
                                     aria-describedby="helpId"
-                                    placeholder="第一節～第{{ H1stSelRange }}節"
+                                    placeholder="第一節～第{{ H1stRange }}節"
                                 />
                             </div>
                         </div>

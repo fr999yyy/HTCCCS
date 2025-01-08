@@ -6,7 +6,7 @@ from .auth_utils import std_authenticate, std_login, std_logout, get_student
 import zipfile, csv, shutil, os
 from django.core.files.storage import FileSystemStorage
 from django.db import connection
-from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse
+from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult
 import pandas as pd
 
 
@@ -27,14 +27,14 @@ def stdLogin(request):
         std_id = request.POST['std_id']
         team = request.POST['team']
         satb = request.POST['satb']
-        current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+        current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
         print(std_id, team, satb)
         student = std_authenticate(std_id=std_id, team=team, satb=satb)
         student_instance = Student.objects.get(std_id=std_id)
-        if student_instance.form1_completed & (current_form == 1):
+        if student_instance.form1_completed & (current_form_stage == 1):
             messages.error(request, '你已經選過課囉！')
             return redirect('/stdLogin')
-        if student_instance.form2_completed & (current_form == 2):
+        if student_instance.form2_completed & (current_form_stage == 2):
             messages.error(request, '你已經選過課囉！')
             return redirect('/stdLogin')
 
@@ -82,24 +82,24 @@ def result(request):
 
 def updateData(request):
     db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
-    J1stSelRange = AdminSetting.objects.get(setting_name='J1stRange').configuration
-    H1stSelRange = AdminSetting.objects.get(setting_name='H1stRange').configuration
+    J1stRange = AdminSetting.objects.get(setting_name='J1stRange').configuration
+    H1stRange = AdminSetting.objects.get(setting_name='H1stRange').configuration
     SelectionStage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
     return render(request, 'updateData.html', {
         'db_name': db_name, 
-        'J1stSelRange': J1stSelRange, 
-        'H1stSelRange': H1stSelRange, 
+        'J1stRange': J1stRange, 
+        'H1stRange': H1stRange, 
         'SelectionStage': SelectionStage
         })
 
 def update_settings(request):
     if request.method == 'POST':
-        J1stSelRange = request.POST['J1stSelRange']
-        H1stSelRange = request.POST['H1stSelRange']
+        J1stRange = request.POST['J1stRange']
+        H1stRange = request.POST['H1stRange']
         SelectionStage = request.POST['SelectionStage']
-        print(J1stSelRange, H1stSelRange, SelectionStage)
-        AdminSetting.objects.filter(setting_name='J1stSelRange').update(configuration=str(J1stSelRange)) if J1stSelRange else None
-        AdminSetting.objects.filter(setting_name='H1stSelRange').update(configuration=str(H1stSelRange)) if H1stSelRange else None
+        print(J1stRange, H1stRange, SelectionStage)
+        AdminSetting.objects.filter(setting_name='J1stRange').update(configuration=J1stRange) if J1stRange else None
+        AdminSetting.objects.filter(setting_name='H1stRange').update(configuration=H1stRange) if H1stRange else None
         AdminSetting.objects.filter(setting_name='SelectionStage').update(configuration=SelectionStage)
         messages.success(request, '設定已更新')
         return redirect('updateData')
@@ -109,6 +109,9 @@ def upload_zip(request):
     valid_files = {'db_import.xlsx', 'pfp'}
     if request.method == 'POST' and request.FILES.get('uploadZip'):
         zip_file = request.FILES['uploadZip']
+        if zip_file.name != 'DBzip.zip':
+            messages.error(request, '請按照檔名與格式要求上傳')
+            return redirect('updateData')
         fs = FileSystemStorage()
         zip_filename = fs.save(zip_file.name, zip_file)
         extract_folder = fs.location + '/'
@@ -142,8 +145,13 @@ def upload_zip(request):
             messages.error(request, '請依照檔名與格式要求上傳')
             return redirect('updateData')
 
-            # Move the 'pfp' folder to the media root
-
+        # 原本要把大頭貼資料夾移到media，但又會有資料覆蓋的問題，重新上傳應該挺吃資源的？
+        # 壓縮檔就統一叫DBzip就好
+        # pfp_folder_name = "pfp"
+        # pfp_folder_path = os.path.join(path, pfp_folder_name)
+        # if os.path.isdir(pfp_folder_path):
+        #     # Step 3: Move the folder to the destination directory
+        #     shutil.move(pfp_folder_path, fs.location)
 
         if 'db_import.xlsx' in extracted_files:
             dfs = pd.read_excel(os.path.join(path, 'db_import.xlsx'), sheet_name=None)
@@ -205,8 +213,8 @@ def pSel(request):
         team = request.session['team']
         student_instance = Student.objects.get(std_id=std_id)
         team_display = Student.TEAM_CHOICES[team-1][1]
-        current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
-        form_type = student_instance.j_or_h + str(current_form) #returning J1, J2, H1, H2
+        current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+        form_type = student_instance.j_or_h + str(current_form_stage) #returning J1, J2, H1, H2
         form_display = dict(Student.FORM_DISPLAY)[form_type] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
         
         student = {
@@ -217,7 +225,8 @@ def pSel(request):
         }
         request.session['team_display'] = team_display
         request.session['form_display'] = form_display
-        request.session['current_form'] = current_form
+        request.session['current_form_stage'] = current_form_stage
+        request.session['form_type'] = form_type
         return render(request, 'pSel.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
     else:
         return redirect('/stdLogin')
@@ -227,9 +236,15 @@ def get_courses(request):
     std_id = request.session['std_id']
     student_instance = Student.objects.get(std_id=std_id)
     selection_range = AdminSetting.objects.get(setting_name=student_instance.j_or_h + '1stRange').configuration
-    section_instances = Section.objects.filter(section_id__lte=selection_range)
-    course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
-    sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
+    if AdminSetting.objects.get(setting_name='SelectionStage').configuration == '1':
+        section_instances = Section.objects.filter(section_id__lte=selection_range)
+        course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
+        sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
+    else:
+        section_instances = Section.objects.filter(section_id__gt=selection_range)
+        course_instances = Course.objects.filter(section_id__gt=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
+        sp_course_instances = SpecialCourse.objects.filter(section_id__gt=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
+
     
     sections_with_courses = [] # list中插入dict用來分開儲存每一個節次對應的所有課程，以及課程數量，用來顯示志願選項數量
     for section in section_instances:
@@ -329,6 +344,7 @@ def confirm(request):
 def submit_form(request):
     selections = request.session.get('selections', [])
     std_id = request.session['std_id']  # Assuming std_id is used as the username
+    form_type = request.session['form_type']
 
     # Process and save the selections to the database
     for selection in selections:
@@ -341,9 +357,10 @@ def submit_form(request):
 
         selection_instance = Selection.objects.create(
             priority=priority,
-            std_id=Student.objects.get(std_id=std_id),
+            std=Student.objects.get(std_id=std_id),
             course_id=course_instance.course_id,
-            section_id=Section.objects.get(section_id=section_id)
+            section=Section.objects.get(section_id=section_id),
+            form_type=form_type
         )
 
     # Clear the selections from the session
@@ -353,19 +370,84 @@ def submit_form(request):
 def success(request):
     std_id = request.session['std_id']
     student = Student.objects.get(std_id=std_id)
-    current_form = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+    current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
 
 
-    if current_form == '1':
+    if current_form_stage == '1':
         student.form1_completed = True
         print('form1 completed')
-    elif current_form == '2':
+    elif current_form_stage == '2':
         student.form2_completed = True
         print('form1 completed')
     # student.save() 測試先關掉
+    request.session.clear()
     std_logout(request)
     return render(request, 'success.html')
 
 def stdLogout(request):
     std_logout(request)
     return redirect('/stdLogin')
+
+def process_selection_results(request):
+    if request.method == 'POST':
+        processing_stage = request.POST['processing_stage']
+        if processing_stage == '1': 
+            sections = Section.objects.filter(section_id__lte=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 1~6
+        if processing_stage == '2': 
+            sections = Section.objects.filter(section_id__gt=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 7~12
+
+        for section in sections:
+            # Process courses with course_type = 'na' first
+            courses_in_section = list(Course.objects.filter(section_id=section.section_id))
+            special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section.section_id))
+            all_courses_in_section = courses_in_section + special_courses_in_section
+
+            # Sort courses to process 'na' courses first
+            all_courses_in_section.sort(key=lambda x: (x.course_type != 'na', x.course_id))
+
+            for course in all_courses_in_section:
+                if course.course_type == 'na':
+                    # Assign students from the previous course to this course
+                    previous_course_id = course.course_id - 1
+                    previous_course = Course.objects.get(course_id=previous_course_id)
+                    previous_selections = SelectionResult.objects.filter(course=previous_course)
+
+                    for selection in previous_selections:
+                        SelectionResult.objects.create(
+                            std=selection.std,
+                            course=course,
+                            section=section,
+                            form_type=selection.form_type
+                        )
+
+            # Process other courses based on priorities
+            for priority in range(1, 6):  # Assuming priorities range from 1 to 5
+                for course in all_courses_in_section:
+                    if course.course_type == 'na':
+                        continue
+
+                    selections = Selection.objects.filter(
+                        section=section,
+                        course_id=course.course_id,
+                        priority=priority
+                    )
+
+                    if selections.count() <= course.std_limit:
+                        for selection in selections:
+                            SelectionResult.objects.create(
+                                std=selection.std,
+                                course=course,
+                                section=section,
+                                form_type=selection.form_type
+                            )
+                    else:
+                        selected_students = random.sample(list(selections), course.std_limit)
+                        for selection in selected_students:
+                            SelectionResult.objects.create(
+                                std=selection.std,
+                                course=course,
+                                section=section,
+                                form_type=selection.form_type
+                            )
+        messages.success(request, '選課結果已處理完成')
+    return redirect('result')  # Redirect to a success page or another appropriate page

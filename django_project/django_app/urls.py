@@ -8,6 +8,7 @@ urlpatterns = [
     path('dashboard', views.dashboard, name='dashboard'),
     path('dashboard/updateData', views.updateData, name='updateData'),
     path('dashboard/result', views.result, name='result'),
+    path('dashboard/result/process_selection_results', views.process_selection_results, name='process_selection_results'),
     path('upload_zip', views.upload_zip, name='upload_zip'),
     path('update_settings', views.update_settings, name='update_settings'),
     path('pSel', views.pSel, name='pSel'),
