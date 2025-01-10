@@ -7,6 +7,7 @@ urlpatterns = [
     path('vLogin', views.vLogin, name='vLogin'),
     path('dashboard', views.dashboard, name='dashboard'),
     path('dashboard/updateData', views.updateData, name='updateData'),
+    path('process_excel_form', views.process_excel_form, name='process_excel_form'),
     path('dashboard/result', views.result, name='result'),
     path('dashboard/result/process_selection_results', views.process_selection_results, name='process_selection_results'),
     path('upload_zip', views.upload_zip, name='upload_zip'),

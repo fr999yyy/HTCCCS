@@ -4,6 +4,7 @@ from django.contrib.auth.models import User, auth
 from django.contrib import messages
 from .auth_utils import std_authenticate, std_login, std_logout, get_student
 import zipfile, csv, shutil, os
+import random
 from django.core.files.storage import FileSystemStorage
 from django.db import connection
 from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult
@@ -145,7 +146,7 @@ def upload_zip(request):
             messages.error(request, '請依照檔名與格式要求上傳')
             return redirect('updateData')
 
-        # 原本要把大頭貼資料夾移到media，但又會有資料覆蓋的問題，重新上傳應該挺吃資源的？
+        # 大頭貼路徑一律指定media/DBzip/pfp。原本要把大頭貼資料夾移到media，但又會有資料覆蓋的問題，重新上傳應該挺吃資源的
         # 壓縮檔就統一叫DBzip就好
         # pfp_folder_name = "pfp"
         # pfp_folder_path = os.path.join(path, pfp_folder_name)
@@ -388,42 +389,128 @@ def stdLogout(request):
     std_logout(request)
     return redirect('/stdLogin')
 
+
+def process_excel_form(request):
+    if request.method == 'POST' and request.FILES.get('upload_excel_form'):
+        excel_file = request.FILES['upload_excel_form']
+        fs = FileSystemStorage()
+        filename = fs.save(excel_file.name, excel_file)
+        file_path = fs.path(filename)
+        name_not_found = False
+        form_type = request.POST['form_type']
+
+        # Read the Excel file
+        df = pd.read_excel(file_path)
+
+        # Standardize column names
+        df.columns = df.columns.str.strip().str.lower()
+
+        # Check if 'std_id' column exists
+        # if 'std_id' not in df.columns:
+        #     # fs.delete(filename)
+        #     messages.error(request, 'std_id 欄位不存在')
+        #     return redirect('updateData')
+
+        # Process the data
+        unfound_courses = []
+        for index, row in df.iterrows():
+            print(row)
+            std_id = row['std_id']
+            try:
+                student = Student.objects.get(std_id=std_id)
+            except Student.DoesNotExist:
+                fs.delete(filename)
+                messages.error(request, f'Student with std_id {std_id} does not exist')
+                return redirect('updateData')
+
+            for col in df.columns:
+                if col != 'std_id':
+                    section_id, priority = col.split('_')
+                    course_name = row[col]
+                    course_instance = Course.objects.filter(section_id=section_id)
+                    special_course_instance = SpecialCourse.objects.filter(section_id=section_id)
+                    if course_instance.filter(course_name=course_name).exists():
+                        print('course_name:', course_name)
+                        print('section_id:', section_id)
+                        print('priority:', priority)
+                        course = course_instance.get(course_name=course_name)
+                    elif special_course_instance.filter(course_name=course_name).exists():
+                        course = special_course_instance.get(course_name=course_name)
+                    else:
+                        unfound_courses.append(course_name)
+                        name_not_found = True
+                        continue
+
+                    section = Section.objects.get(section_id=section_id)
+
+                    # Save the selection to the database
+                    Selection.objects.create(
+                        priority=priority,
+                        std=student,
+                        course_id=course.course_id,
+                        section=section,
+                        form_type=form_type
+                    )
+
+        # Clean up the uploaded file
+        if name_not_found:
+            fs.delete(filename)
+            messages.error(request, '課程無法對應資料庫：' + ', '.join(unfound_courses))
+            return redirect('updateData')
+
+        fs.delete(filename)
+        messages.success(request, '資料匯入已完成')
+        return redirect('updateData')
+
+    return render(request, 'updateData.html')
+
 def process_selection_results(request):
     if request.method == 'POST':
         processing_stage = request.POST['processing_stage']
         if processing_stage == '1': 
             sections = Section.objects.filter(section_id__lte=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 1~6
-        if processing_stage == '2': 
+        elif processing_stage == '2': 
             sections = Section.objects.filter(section_id__gt=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 7~12
 
         for section in sections:
-            # Process courses with course_type = 'na' first
+            assigned_students = set()  # 追蹤已經被分配的學生
+            vacancy = {}  # 追蹤每個課程的缺額
+
             courses_in_section = list(Course.objects.filter(section_id=section.section_id))
             special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section.section_id))
             all_courses_in_section = courses_in_section + special_courses_in_section
 
-            # Sort courses to process 'na' courses first
+            # 優先排序連堂的第二堂課
             all_courses_in_section.sort(key=lambda x: (x.course_type != 'na', x.course_id))
+
 
             for course in all_courses_in_section:
                 if course.course_type == 'na':
-                    # Assign students from the previous course to this course
+                    # 連堂的第二堂課id = 第一堂課id + 1
+                    # 優先處理連堂的第二堂課
                     previous_course_id = course.course_id - 1
                     previous_course = Course.objects.get(course_id=previous_course_id)
                     previous_selections = SelectionResult.objects.filter(course=previous_course)
 
                     for selection in previous_selections:
-                        SelectionResult.objects.create(
-                            std=selection.std,
-                            course=course,
-                            section=section,
-                            form_type=selection.form_type
-                        )
+                        if selection.std.std_id not in assigned_students:
+                            SelectionResult.objects.create(
+                                std=selection.std,
+                                course=course,
+                                section=section,
+                                form_type=selection.form_type
+                            )
+                            assigned_students.add(selection.std.std_id)
 
             # Process other courses based on priorities
-            for priority in range(1, 6):  # Assuming priorities range from 1 to 5
+            for priority in range(1, 6): 
+
                 for course in all_courses_in_section:
-                    if course.course_type == 'na':
+
+                    if course.course_id not in vacancy:
+                        vacancy[course.course_id] = course.std_limit
+
+                    if course.course_type == 'na' or vacancy[course.course_id] == 0:
                         continue
 
                     selections = Selection.objects.filter(
@@ -432,16 +519,20 @@ def process_selection_results(request):
                         priority=priority
                     )
 
-                    if selections.count() <= course.std_limit:
-                        for selection in selections:
+                    available_selections = [s for s in selections if s.std.std_id not in assigned_students]
+
+                    if len(available_selections) <= vacancy[course.course_id]:
+                        for selection in available_selections:
                             SelectionResult.objects.create(
                                 std=selection.std,
                                 course=course,
                                 section=section,
                                 form_type=selection.form_type
                             )
+                            assigned_students.add(selection.std.std_id)
+                            vacancy[course.course_id] -= 1
                     else:
-                        selected_students = random.sample(list(selections), course.std_limit)
+                        selected_students = random.sample(available_selections, vacancy[course.course_id])
                         for selection in selected_students:
                             SelectionResult.objects.create(
                                 std=selection.std,
@@ -449,5 +540,99 @@ def process_selection_results(request):
                                 section=section,
                                 form_type=selection.form_type
                             )
+                            assigned_students.add(selection.std.std_id)
+                        vacancy[course.course_id] = 0
         messages.success(request, '選課結果已處理完成')
-    return redirect('result')  # Redirect to a success page or another appropriate page
+        return redirect('result')
+    return redirect('result')  
+# 測試志願選填系統
+# from django_app.models import SelectionResult, Selection
+# test_std_id = 1
+# result_instance = SelectionResult.objects.filter(std_id=test_std_id)
+# for result in result_instance:
+#     selection = Selection.objects.get(std = result.std, course_id=result.course.course_id)
+#     print('priority:', selection.priority)
+
+
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠟⠛⠋⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠙⠛⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠛⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⠀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣤⣴⡄⠸⣿⣿⣇⠸⣿⣿⡏⢰⣿⠇⣸⣿⡿⢀⣿⡆⢰⡆⢠⣄⠀⠀⠀⠙⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⠐⢾⣆⠘⠿⠛⠀⠙⡋⠉⠀⠉⠉⠀⣚⣛⣀⣙⣛⡃⠘⠿⠀⠿⠃⣼⡏⢰⣷⠀⡀⢹⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣶⡈⢻⣧⠈⠉⣀⣂⣭⣥⣶⣶⣿⣿⣿⣿⣶⣦⣭⣭⣭⣭⣭⣭⣭⡃⣶⣦⣬⡀⠻⠏⢀⡇⠈⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⢤⣶⣄⠹⠿⠀⣠⣶⣿⣿⣿⣿⠿⠿⠿⠿⠿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠿⠿⢿⣿⣿⣷⣄⡈⢁⠀⢸⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⢀⠐⢷⣄⡉⠛⣁⣴⣾⣿⣿⣋⣥⣶⣶⣾⣿⣿⣿⣿⡖⢿⣿⣿⣿⣿⣿⣿⣯⢴⣿⣿⣿⣶⣌⠻⣿⣿⣧⠈⠀⢸⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⣄⠙⢷⡄⠋⣠⣾⣿⣿⣿⣿⣿⣿⠛⣛⣛⣋⣩⣿⣿⣿⣿⣆⢹⣿⣿⣿⣿⣿⣿⠀⣿⣿⣿⠿⠿⣿⣿⣿⣿⠀⠁⣾⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⢴⣦⡙⠳⠄⢀⣾⣿⣿⣿⣿⣿⣿⢿⣿⣿⣿⠿⠿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣤⣿⣿⣿⣿⣷⣶⣬⣙⣻⠇⣸⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⣶⣄⠙⢿⡆⢠⣿⣿⠿⣿⣿⣿⣿⣃⣀⣨⣇⠐⢶⠀⠀⠀⠀⣠⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⠋⣉⡉⠛⠛⠛⣿⡿⢯⠀⣿⣿⣿⣿⣿⣿⣿⢿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⠀⣦⠘⢿⣶⠄⢠⣾⣿⣿⡎⠘⠛⣿⣿⣿⣿⣿⡏⣁⣀⢀⣀⣀⠀⠀⠈⣿⣿⣿⣿⣿⣿⣿⣿⣏⠠⡉⠁⠀⠀⠀⣿⣄⠛⠀⢿⣿⣿⣿⣿⣿⡏⣼⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠹⣷⣄⠙⢠⣿⣿⣿⣿⡧⠈⡀⣻⣿⣿⣿⣿⣧⣬⣍⣀⠀⠀⠈⢀⣼⣿⣿⣿⣿⣿⣿⣿⠈⣿⣦⣀⠈⠁⠀⠰⠛⣿⣿⡇⠈⣿⣿⣿⣿⣿⠇⣾⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠹⣿⡇⢸⣿⣿⣿⣿⡏⠀⠓⢌⠼⢻⣿⣿⣿⣿⣿⣿⣷⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠹⣿⣿⣦⣼⣿⣿⣿⣿⣿⣥⠀⣿⣿⣿⣿⠟⠁⣰⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡈⠃⣸⣿⣿⣿⣿⡇⢸⡓⣎⡇⠧⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣄⠙⢿⣿⣿⣿⡿⢷⡿⣏⠢⠀⣿⣿⡏⠌⣴⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠦⠘⣿⣿⣿⣿⣇⠈⠼⡐⢛⢀⠺⣿⡙⢿⣿⣿⣿⣿⣿⣿⠟⢛⣉⣿⣿⣿⣿⣿⣿⣿⣷⠀⣿⣿⣿⣿⣮⡀⢠⠅⣰⣿⣿⠘⣼⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⡀⢸⣿⣿⣿⣿⡆⠨⢼⣆⡻⣦⠹⣛⣧⣿⣿⣿⣿⡟⢿⡄⠹⣿⣿⡿⠿⢿⣿⣿⣿⠁⣼⣿⣿⣏⡟⡥⠀⠀⢠⣿⣿⡆⢿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⢸⣿⣿⣿⣿⣷⡄⠸⣡⠯⠛⣖⡆⣽⣿⣍⣿⡟⢡⡾⢿⠶⣶⣾⣗⣿⡿⣛⣶⣤⣼⡁⣿⣟⣋⠌⡶⠄⢠⣿⣿⡟⠈⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃⢸⣿⣿⣿⣿⣿⠹⡄⠁⠜⣷⣾⢻⣭⡀⣶⡟⣰⣿⡉⣟⢋⣤⣼⡮⠂⢖⡋⠓⠺⠿⣇⢹⣷⡃⡅⠃⣰⣿⣿⣿⡗⢀⢸⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣏⠀⢸⣿⣿⣿⣿⣿⡇⣷⢤⡄⠉⠻⢃⢥⡛⣾⣤⣿⣿⣁⣌⣙⡛⠻⠿⠿⠿⠿⠛⠐⠂⢌⡀⢿⡩⠄⣴⣿⣿⣿⣿⡿⢸⠘⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠛⠛⠋⠁⠀⣾⣿⣿⣿⣿⣿⠀⣗⣿⣿⣧⣄⠀⠁⢳⣬⠘⢻⣿⣿⢿⣿⣿⣏⡙⣉⢙⣛⣁⡒⣌⡀⢍⠫⠉⠀⣿⣿⣿⣿⣿⠇⠜⢠⣿⣿⣿⣿⣿
+# ⣿⣿⣿⣿⣿⠿⠟⠉⠁⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⣿⠧⢴⠿⡼⢞⣦⣙⣏⣦⠀⠻⢳⣖⣾⠻⣯⣝⢳⣩⡿⡿⢛⣻⢟⠿⡏⣛⡆⠈⠂⢔⠻⣿⠟⡫⠔⣋⣴⣿⣿⣿⣿⣿⣿
+# ⣿⣿⣿⠏⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣿⣿⣇⠲⠭⢶⣵⠖⣙⣬⡿⣧⣆⠀⠘⢾⢉⣿⣿⣆⣿⢋⣽⣿⣴⡏⣭⣧⠛⠃⢴⣿⣶⣍⢀⣤⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⣿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣿⣿⣿⣿⠿⠛⢉⣶⠽⣭⣾⣿⡷⢽⡻⣿⣷⣇⢄⢈⡙⠛⠇⠾⠿⠷⠻⠿⠟⠋⠁⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠚⠿⣿⣿⣿⣿⠁⣴⣿⣿⣿⣿⣿⣦⣿⣎⣢⡝⣶⣦⣹⣮⣠⠸⣟⣶⣶⣷⡦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠁⢾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣿⣷⣝⢻⣿⣧⣘⠻⣿⣿⣿⣦⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⣿⣾⣿⣷⣿⣾⡿⠟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠉⠙⠛⠿⣿⣿
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢉⣙⡛⠋⠩⠍⠻⠿⢿⡿⠟⣛⡛⠿⠛⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⡧⣌⢉⣁⣀⢀⣀⣀⢒⡶⠖⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠺⠽⠾⢟⣓⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⠀⣀⣀⣀⢤⣀⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⢤⣴⣲⣶⢶⠺⠾⠟⡛⢋⠛⠉⡉⠎⠉⡉⠙⠒⠛⠿⢾⡿⢱⣶⣦⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⢴⣾⡿⣟⣻⠍⡉⢀⢁⠀⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠉⠒⠈⠉⠚⠳⠻⠷⢲⡤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠤⣶⣿⠿⠉⠁⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠈⡙⢯⣷⡦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⣾⠿⠯⠅⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠻⡷⢶⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣿⠻⠙⠀⠂⠀⠀⠀⢢⣴⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣶⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣰⣶⣿⣿⣿⣿⣿⣿⣶⣶⣶⣶⣄⠈⠛⢿⡢⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⠿⠛⡉⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣟⣿⣯⣿⣾⣯⣿⣽⣿⣿⡿⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠿⣿⣿⣯⣷⣿⣷⣿⣯⣿⣿⣿⣿⢠⠈⠀⠹⢿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡦⣶⣢⣦⡀⣀⢀⣶⠿⡋⠂⠁⠀⠀⠀⠀⠀⠀⠀⠐⡈⢿⣿⣿⡿⠿⠟⠛⠛⠉⠉⠉⠀⠀⠐⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠉⠉⡙⠛⠛⠿⠿⣿⣿⠏⠀⠀⠀⠀⠈⣹⢳⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⠀⠀⢀⡴⠏⠁⠀⠀⢻⣿⣷⣿⡟⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠢⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠒⠲⠤⠊⠀⠀⠀⠀⠀⠘⠮⣱⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⢀⠞⠉⠀⠩⢲⣤⡶⠉⠀⠀⠀⠀⠀⢀⣿⣿⢃⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⢼⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⢠⠫⠀⠀⠀⠀⠈⢿⠀⠀⡀⠀⠀⠀⣠⣾⡿⢈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⢀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⣝⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⡼⢯⠀⠀⠀⠀⢀⣿⠀⠀⠈⠓⢦⡿⠿⠏⠉⠉⠙⠲⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠳⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣈⢄⡈⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠞⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⡟⣸⠐⠤⠤⠴⠾⣳⠀⠀⠀⡴⣿⠃⠀⠀⠀⡀⠀⠀⠀⠙⠲⣄⠀⠀⠀⠀⠀⠀⠀⣀⡀⠄⠄⣀⣠⣤⣤⣤⣤⣦⣤⣤⣄⣀⡀⠀⠀⠀⠀⠘⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⡀⠀⢀⣀⣤⣴⣶⣶⣶⣶⣶⣶⣦⣤⣄⣀⠀⠀⠀⠀⠀⠀⠻⢽⣤⡤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⣽⢺⡀⠀⠀⠀⠠⣿⠀⠓⠲⡏⠁⣄⠀⠀⢀⣧⡀⠀⠀⠀⠀⣸⡇⠀⠀⠀⣀⣀⣬⣷⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣦⣄⣀⠀⠅⠀⠀⣀⣠⠤⢂⣀⣤⣶⣿⣿⣿⣿⣿⡿⠿⠿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣤⣤⣴⣿⣿⣿⣸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⢼⡆⠀⣀⣀⣀⡼⢯⡀⠀⢘⡇⠀⣼⣷⣶⣿⣿⣷⣕⣀⣀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠿⠛⠛⠉⠉⠉⠉⠉⠉⠛⠙⠛⠿⣿⣿⣿⣿⣿⣷⣶⣤⣤⣶⣾⣿⣿⣿⣿⣿⠿⠛⠉⠀⠀⠀⠀⠀⠨⠀⠀⠉⠛⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢾⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠸⣷⡀⠀⠀⠀⠀⢸⣷⠀⣽⡇⣠⣿⠁⠁⠉⢉⠛⣿⡿⠋⠛⢿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠃⠀⢀⢠⣀⣀⣀⡀⠄⠀⠀⢀⣘⣶⣀⣀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠫⣀⣤⣤⣴⣦⣤⣕⡀⣄⣤⣴⣿⣷⣤⡀⢸⣿⣿⣿⣿⡿⠛⠉⠹⣿⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⢀⣿⡇⠀⠀⠀⠀⠀⣿⣿⣿⡷⣿⡃⢁⠀⠀⢀⣸⠁⠀⠀⠀⢸⡇⠈⢻⣿⣿⣿⣿⡏⠀⢀⡼⣿⣿⣿⣿⣿⣿⣷⣶⣿⣿⣿⣿⣿⣿⡄⠐⢻⣿⣿⣿⣿⣿⣿⣿⣿⡏⠀⡸⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡷⠀⢹⣿⣿⣿⠇⡆⠀⠐⢿⣏⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⡾⠭⠁⠀⠀⠀⠀⠀⢾⣿⡿⣽⡿⠙⠲⠤⣰⠏⠚⢦⡀⠀⠀⣼⠇⠀⠀⣿⣿⣿⣿⡇⠀⠈⡇⢻⣿⣿⣿⣿⣿⣿⠻⣿⣿⣿⣿⣿⣿⠃⠀⠨⣿⣿⣿⡷⣿⣿⣿⣿⠀⠀⠁⠘⢿⣿⣿⣿⣿⣿⠃⠻⣿⣿⣿⣿⡿⠃⠀⣸⣿⣿⣿⢠⠃⠀⠈⡼⣿⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⢀⣼⡏⠁⠀⠀⠀⠀⠀⠀⣿⣿⠟⠋⠀⠀⠀⠀⠈⢣⡀⠀⡉⠆⣠⠟⠀⠀⠀⢿⣿⣿⣿⣇⠀⠀⣀⡈⡙⠿⠿⠿⠟⠁⠀⠉⠛⢿⣟⣿⠥⠀⠀⠨⣿⣿⣿⡇⣿⣿⣿⣿⠀⠀⢾⢤⡬⡭⢿⣛⣉⣀⣀⣀⠬⠽⢽⡿⠒⠀⢠⣿⣿⣿⠃⠎⠀⠀⠀⢻⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⢸⣿⠇⠀⠀⠀⠀⠀⠀⢠⣿⠉⠁⠀⠀⠀⠀⠀⠀⠀⠃⠀⡶⠋⠁⠀⠀⠀⠀⠈⣿⣿⣿⣿⡄⠀⠉⠙⢾⡍⣏⣉⣉⣩⠭⢭⢩⠥⣟⠁⠀⡄⠀⣸⣿⣿⡿⠉⠻⣿⣿⣿⣷⠀⠀⠀⠙⠧⣚⠀⠒⠀⠇⠘⠒⣏⢿⠀⠀⣰⣿⣿⣿⠏⡍⠀⠀⠀⠀⣽⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⢸⡇⠀⠀⠀⠀⠀⠀⠀⣰⡿⠀⠀⠀⠀⠀⠀⠀⠀⡀⣰⠟⠁⠀⠀⠀⠀⠀⠀⠀⠈⢿⣿⣿⣿⣦⠀⠀⠐⣌⠓⠤⠤⠼⢄⠤⠔⣫⠎⢀⡜⢀⣼⣿⣿⡿⢁⠀⠀⠻⣿⣿⣿⣷⣄⠀⠀⠱⣄⡉⠓⠒⠓⠚⢉⡱⠋⢀⣴⣿⣿⡿⢋⠜⠀⠀⠀⠀⠀⣽⣹⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⣠⣟⣧⠀⠀⠀⠀⠀⠀⢰⡿⠁⠀⡄⣀⣀⣤⡴⠶⠞⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣤⣀⠈⠑⠲⠤⠤⠤⠴⠛⣁⡄⣊⣤⣿⣿⣿⠟⠁⠈⠀⠀⠀⠈⢿⣿⣿⣿⣷⣦⣄⣀⠉⢑⣒⣒⣚⣁⣤⣶⣿⣿⣿⠟⠁⠈⠀⠀⠀⠀⠀⢄⣻⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⣿⠙⠛⠶⣤⡀⠀⡀⣴⣿⠃⣠⣾⣷⣿⣉⠄⠡⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⢿⣿⣿⣿⣿⣶⣶⣤⣤⣤⣬⣶⣶⣿⣿⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠈⠢⣙⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⣄⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠻⢷⣦⣀⠀⠉⠓⠒⠾⢿⣾⣿⢸⣿⡷⡸⢌⠐⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠠⢙⠻⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠑⠤⠉⠛⠻⠿⠿⠿⠿⠿⠟⠛⠋⢁⣀⣤⣬⣾⡓⠀⠀⠀⠀⠀⠰⣸⣿⡗⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠈⠉⠉⠒⠒⠒⠺⢯⠿⠁⢸⢿⣷⡱⢊⠔⡡⢀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣦⣴⣤⣄⣀⣀⠀⠀⠀⠉⠀⠐⠀⠉⠍⠉⠉⢡⠈⣀⡀⠀⠀⢀⣀⣀⣀⣀⣀⣀⣀⣀⠀⠀⣀⠀⠀⠀⠀⠊⠁⠀⣀⣠⣤⡴⠶⣿⣿⡿⡿⠋⠉⠻⣍⠀⠀⠀⠀⢐⣿⢿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡴⡤⡴⡒⡤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⡱⣍⠲⡐⠄⠂⠀⠀⠀⠀⠈⡻⠟⠉⠉⠓⢿⣯⡉⠉⠙⣿⠛⠿⠷⠶⠶⣶⣤⣤⣤⣠⣀⣀⣉⣀⣉⣁⣀⣀⣀⣀⣀⣀⣠⣤⣤⣤⣤⠤⠤⠶⠶⠖⢻⠛⠋⠉⣼⠇⣤⣿⠟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⢬⣿⡎⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⢾⡟⠁⠀⠀⠁⠘⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣗⢮⡓⣌⠒⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⢄⡀⣿⠁⠀⠀⠀⠀⢰⠀⠀⠀⠀⠈⠉⢨⡉⠉⠉⠉⠉⠉⢩⡍⠉⠁⠀⠀⠀⢠⠀⠀⠀⠀⠀⣾⠁⠀⢠⡿⢤⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣽⢿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⡇⠀⠀⠀⠀⠀⡯⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⢶⡹⣄⠣⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢿⣧⣆⣀⣀⡀⣸⣀⠀⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⣼⡀⠀⠀⠀⠀⢀⣼⣀⣀⣀⡤⣼⡗⠒⠛⢉⣷⠎⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⡟⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⠷⠤⠤⠠⠤⢾⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⣧⢷⡸⣑⠂⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠢⣄⠀⠉⢹⠋⠋⠙⠚⠒⠒⢻⠓⠒⠒⠒⠋⠙⢻⠋⠉⠉⠉⠉⠉⡏⠀⠀⠀⠀⠀⡇⠀⢀⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣒⡿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⣿⠂⠀⠀⠀⠀⢸⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢯⣿⣮⢷⡑⢎⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠓⢤⣸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠇⠀⠀⠀⠀⠀⣧⡴⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡄⣿⡳⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⠀⠀⠀⣀⠔⠛⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡈⢿⣿⣧⢛⣌⠢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢦⡀⠀⠀⠀⠈⠓⢤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⠀⠀⠀⠀⠀⠀⡀⠀⠀⣀⡤⠞⠁⠀⠀⠀⣠⡤⠀⠀⠀⠀⠀⠀⠀⠀⢀⣰⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⡀⠈⠉⠀⠀⠨⣻⡀⠀⠀⠀⠀⠀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠓⠘⡿⣿⣳⣌⢣⠐⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡗⠤⠀⠀⠀⠀⠀⠈⠉⠓⠒⠦⢤⣀⣀⣀⣀⣀⣴⣀⣀⣀⣠⠤⠴⠷⠒⠋⠁⠀⠀⠀⠀⣠⣾⠟⠀⠀⠀⠀⠀⠀⠀⠀⣀⣶⣿⡻⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣷⣦⣠⣤⢤⣄⣟⠲⡤⢀⣀⡀⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⢿⢿⣷⣣⠘⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⣦⡄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⠿⠁⠀⠀⠀⠀⠀⠀⡀⠄⡑⣾⣟⠝⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⣿⣟⢧⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠁⠉⢩⢶⡀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢯⣿⣷⣫⠔⡡⠀⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠻⣾⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣤⠾⠋⠁⠀⠀⠀⠀⠀⠀⡀⠢⢐⣸⣼⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⡶⢹⣿⡍⢾⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢯
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢿⣿⣿⣌⡱⢈⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠷⣦⣔⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⢀⣠⠴⠞⠋⠁⠀⠀⠀⠀⠀⠀⢀⠠⠐⢤⣡⣾⣯⠎⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣰⡽⠰⣿⣿⣖⡜⣿⣿⣧⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢄⣾
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣷⣬⣒⠠⠁⠄⠠⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠙⠛⠶⠶⠖⠶⠲⠲⠲⠐⠞⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠠⠀⢂⠄⣊⣵⡾⣻⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⡇⠀⡟⢩⢋⣿⡟⢭⡉⠏⠙⠛⠛⠻⠻⠿⢭⣍⡹⣯⡔
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠿⣳⣿⣷⡩⢆⡡⠐⡠⠐⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⡀⠠⢀⠡⢀⠈⡂⡁⢆⠱⣌⣮⣟⡯⠎⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⡇⢸⣧⡳⣎⣿⡜⣦⡑⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠚⢳
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠺⢟⣿⣶⡥⢣⡔⡡⢄⡡⢀⠄⡀⢄⡀⠀⠄⠀⢀⠀⠀⠠⠀⠠⠀⠀⠠⠀⠠⠀⠄⠁⠌⡀⠡⢀⠐⠠⢂⡐⠢⡐⢤⡱⣮⢷⡻⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⣳⡸⣿⣷⢭⢻⣿⣶⣣⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠺⣿⣿⣾⣱⣦⡜⣤⢊⡔⠢⣄⠡⡈⠔⡠⢈⠄⡡⢈⠠⠈⡄⡁⠤⢁⡐⠌⡰⠠⢄⠡⢂⡌⣑⢢⣬⣵⣭⣷⠿⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠳⢽⣿⣎⣦⣽⣿⣿⣶⣤⣀⣀⣀⣀⣀⣀⣀⣀⣠⠛
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠁⠛⠽⢟⡶⢷⣮⣷⣤⣓⡱⢎⡴⣁⠎⡔⢢⣁⢣⡐⣌⠒⣤⢢⡱⣄⣣⣼⣬⡷⢿⣾⠯⠛⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠈⠉⠹⠻⡋⠁⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠁⠚⠛⠿⠿⣻⢷⣻⣾⣟⣷⣮⣷⣝⡾⣿⣶⠷⠟⠚⠛⠓⠊⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⣿⣃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣷⠇⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠺⣻⣆⣀⡀⠀⠀⠀⠀⠀⠀⢠⣽⠀⠀⠀
+# ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠙⠋⠉⠉⠓⠉⠁⠀⠀⠀
