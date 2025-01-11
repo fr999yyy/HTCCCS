@@ -27,12 +27,12 @@
             {% for message in messages %}
                 {% if message.tags == 'error' %}
                 <div class="alert alert-danger alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
-                    <strong>上傳失敗！</strong> {{ message }}
+                    <strong>修改上傳失敗！</strong> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
                 {% elif message.tags == 'success' %}
                 <div class="alert alert-success alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
-                    <strong>上傳成功！</strong> {{ message }}
+                    <strong>修改上傳成功！</strong> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
                 {% endif %}
@@ -42,31 +42,31 @@
                     <h1 class="display-6">修改資料</h1>
                 </div> 
                 <div class="my-4 pt-3 text-start">
-                    <div class="my-3 col-3">
-                        <form method="POST" enctype="multipart/form-data" action="{% url 'upload_zip' %}">
-                            {% csrf_token %}
-                            <label for="uploadZip" class="form-label">上傳資料壓縮檔（DBzip.zip）</label>
-                            <input type="file" class="form-control" name="uploadZip" id="uploadZip" accept=".zip">
-                            <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
-                        </form>
+                    <div class="row g-5 col-6">
+                        <div class="col">
+                            <form method="POST" enctype="multipart/form-data" action="{% url 'upload_zip' %}">
+                                {% csrf_token %}
+                                <label for="uploadZip" class="form-label">上傳資料壓縮檔（DBzip.zip）</label>
+                                <input type="file" class="form-control" name="uploadZip" id="uploadZip" accept=".zip">
+                                <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
+                            </form>
+                        </div>
+                        <div class="col">
+                            <form method="POST" enctype="multipart/form-data" action="{% url 'process_excel_form' %}">
+                                {% csrf_token %}
+                                <label for="upload_excel_form" class="form-label">上傳 Google 志願選填表單</label>
+                                <input type="file" class="form-control" name="upload_excel_form" id="upload_excel_form" accept=".xlsx">
+                                <!-- <select class="form-select mt-2" style="width: auto;" name="stage" id="stage">
+                                    <option value="1" id="JuniorStage1">第一次選課</option>
+                                    <option value="2" id="JuniorStage2">第二次選課</option>
+                                </select> -->
+                                <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
+                            </form>
+                        </div>
                     </div>
-                    <div class="my-4 col-3">
-                        <form method="POST" enctype="multipart/form-data" action="{% url 'process_excel_form' %}">
-                            {% csrf_token %}
-                            <label for="upload_excel_form" class="form-label">上傳 Google 志願選填表單</label>
-                            <input type="file" class="form-control" name="upload_excel_form" id="upload_excel_form" accept=".xlsx">
-                            <select class="form-select mt-2" style="width: auto;" name="form_type" id="form_type">
-                                <option value="J1" id="JuniorStage1">國中部第一次選課</option>
-                                <option value="J2" id="JuniorStage2">國中部第二次選課</option>
-                                <option value="H1" id="HighStage1">高中部第一次選課</option>
-                                <option value="H2" id="HighStage2">高中部第二次選課</option>
-                            </select>
-                            <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
-                        </form>
-                    </div>
-                    <form method="POST" action=" {% url 'update_settings'%}" class="row my-4">
+                    <form method="POST" action=" {% url 'update_settings'%}" class="row mt-3 col-6">
                         {% csrf_token %}
-                        <div class="col-3 mt-3">
+                        <div class="col mt-3">
                             <label for="J1stRange" class="form-label">第一次國中選課範圍</label>
                             <div class="">
                                 <input
@@ -79,7 +79,7 @@
                                 />
                             </div>
                         </div>
-                        <div class="col-3 mt-3">
+                        <div class="col mt-3">
                             <label for="H1stRange" class="form-label">第一次高中選課範圍</label>
                             <div class="">
                                 <input
@@ -92,7 +92,7 @@
                                 />
                             </div>
                         </div>
-                        <div class="row mt-3 ">
+                        <div class="row mt-3">
                             <div class="col-3">
                                 <label for="SelectionStage" class="form-label">現在顯示表單</label>
                                 <div>
@@ -102,12 +102,23 @@
                                         <option value="2" id="Stage2">第二次選課</option>
                                     </select>
                                 </div>
+                                <button type="submit" class="btn btn-primary mt-2">儲存設定</button>
                             </div>
                         </div>
-                        <div class="d-flex flex-row align-items-start mt-3">
-                            <button type="submit" class="btn btn-primary mt-2">儲存設定</button>
-                        </div>  
+                        
                     </form>
+                    <div class="row p-3 my-3 col-6 border border-danger rounded" style="background-color: rgba(255, 0, 0, 0.1);">
+                        <div class="col text-start">
+                            <form id="truncate_data" method="POST" action="{% url 'truncate_data' %}">
+                                {% csrf_token %}
+                                <label class="form-label">刪除資料</label>
+                                <div class="">
+                                    <button name="model" value="Selection" type="submit" class="btn btn-danger mt-2">刪除學員選課資料</button>
+                                    <button name="model" value="SelectionResult" type="submit" class="btn btn-danger mt-2">刪除志願結果</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
             </div>
         </main>
         <footer>
@@ -132,6 +143,11 @@
             } else {
                 document.getElementById('Stage2').selected = true;
             }
+            document.getElementById('truncate_data').addEventListener('submit', function(event) {
+                if (!confirm('確定要刪除資料嗎？')) {
+                    event.preventDefault();
+                }
+            });
         </script>
     </body>
 </html>

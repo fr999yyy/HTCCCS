@@ -5,7 +5,9 @@
         >
             <a class="nav-link fw-bold text-light bNavLink" href="{% url 'result' %}">跑志願與結果</a>
             <a class="nav-link fw-bold text-light bNavLink" href="{% url 'updateData' %}">修改資料</a>
+            <a class="nav-link fw-bold text-light bNavLink" href="{% url 'check_priority' %}">檢查志願</a>
             <a class="nav-link fw-bold text-light bNavLink" href="{% url 'index' %}">回首頁</a>
+
         </nav>
         <div class="me-3 ">
             <p class="lead text-light m-0">年份：{{ db_name }}</p>

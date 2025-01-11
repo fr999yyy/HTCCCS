@@ -9,6 +9,8 @@ from django.core.files.storage import FileSystemStorage
 from django.db import connection
 from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult
 import pandas as pd
+from django.contrib.contenttypes.models import ContentType
+
 
 
 # Create your views here.
@@ -98,7 +100,11 @@ def update_settings(request):
         J1stRange = request.POST['J1stRange']
         H1stRange = request.POST['H1stRange']
         SelectionStage = request.POST['SelectionStage']
-        print(J1stRange, H1stRange, SelectionStage)
+        if J1stRange or H1stRange or SelectionStage == AdminSetting.objects.get(setting_name='SelectionStage').configuration:
+            return redirect('updateData')
+        if (J1stRange and not J1stRange.isdigit()) or (J1stRange and not H1stRange.isdigit()):
+            messages.error(request, '節次請輸入數字')
+            return redirect('updateData')
         AdminSetting.objects.filter(setting_name='J1stRange').update(configuration=J1stRange) if J1stRange else None
         AdminSetting.objects.filter(setting_name='H1stRange').update(configuration=H1stRange) if H1stRange else None
         AdminSetting.objects.filter(setting_name='SelectionStage').update(configuration=SelectionStage)
@@ -292,10 +298,6 @@ def get_courses(request):
 
     return JsonResponse({'sections_with_courses': sections_with_courses})
 
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
-from .models import Student, Section, Course, AdminSetting
-
 def double_check(request): # merge with confirm
     if request.method == 'POST':
         selections = request.POST.getlist('priority')
@@ -396,8 +398,7 @@ def process_excel_form(request):
         fs = FileSystemStorage()
         filename = fs.save(excel_file.name, excel_file)
         file_path = fs.path(filename)
-        name_not_found = False
-        form_type = request.POST['form_type']
+        course_not_found = False
 
         # Read the Excel file
         df = pd.read_excel(file_path)
@@ -406,54 +407,63 @@ def process_excel_form(request):
         df.columns = df.columns.str.strip().str.lower()
 
         # Check if 'std_id' column exists
-        # if 'std_id' not in df.columns:
-        #     # fs.delete(filename)
-        #     messages.error(request, 'std_id 欄位不存在')
-        #     return redirect('updateData')
+        if 'std_id' not in df.columns:
+            # fs.delete(filename)
+            messages.error(request, 'std_id 欄位不存在')
+            return redirect('updateData')
 
         # Process the data
         unfound_courses = []
-        for index, row in df.iterrows():
-            print(row)
-            std_id = row['std_id']
-            try:
-                student = Student.objects.get(std_id=std_id)
-            except Student.DoesNotExist:
-                fs.delete(filename)
-                messages.error(request, f'Student with std_id {std_id} does not exist')
+        dfs = pd.read_excel(file_path, sheet_name=None)
+        for sheet_name, df in dfs.items():
+            form_type = sheet_name if sheet_name in ['J1', 'J2', 'H1', 'H2'] else None
+            if not form_type:
+                messages.error(request, '工作表名稱必須是 J1, J2, H1, H2')
                 return redirect('updateData')
+            for index, row in df.iterrows():
+                print(row)
+                std_id = row['std_id']
+                try:
+                    student = Student.objects.get(std_id=std_id)
+                except Student.DoesNotExist:
+                    fs.delete(filename)
+                    messages.error(request, f'Student with std_id {std_id} does not exist')
+                    return redirect('updateData')
 
-            for col in df.columns:
-                if col != 'std_id':
-                    section_id, priority = col.split('_')
-                    course_name = row[col]
-                    course_instance = Course.objects.filter(section_id=section_id)
-                    special_course_instance = SpecialCourse.objects.filter(section_id=section_id)
-                    if course_instance.filter(course_name=course_name).exists():
-                        print('course_name:', course_name)
-                        print('section_id:', section_id)
-                        print('priority:', priority)
-                        course = course_instance.get(course_name=course_name)
-                    elif special_course_instance.filter(course_name=course_name).exists():
-                        course = special_course_instance.get(course_name=course_name)
-                    else:
-                        unfound_courses.append(course_name)
-                        name_not_found = True
-                        continue
+                for col in df.columns:
+                    if col != 'std_id':
+                        section_id, priority = col.split('_')
+                        course_name = row[col]
+                        course_instance = Course.objects.filter(section_id=section_id)
+                        special_course_instance = SpecialCourse.objects.filter(section_id=section_id)
+                        if course_instance.filter(course_name=course_name).exists():
+                            print('course_name:', course_name)
+                            print('section_id:', section_id)
+                            print('priority:', priority)
+                            course = course_instance.get(course_name=course_name)
+                        elif special_course_instance.filter(course_name=course_name).exists():
+                            course = special_course_instance.get(course_name=course_name)
+                        else:
+                            if course_name not in unfound_courses:
+                                unfound_courses.append(course_name)
+                            course_not_found = True
+                            continue
 
-                    section = Section.objects.get(section_id=section_id)
+                        section = Section.objects.get(section_id=section_id)
 
-                    # Save the selection to the database
-                    Selection.objects.create(
-                        priority=priority,
-                        std=student,
-                        course_id=course.course_id,
-                        section=section,
-                        form_type=form_type
-                    )
+                        # Save the selection to the database
+                        if not course_not_found:
+                            Selection.objects.create(
+                                priority=priority,
+                                std=student,
+                                course_id=course.course_id,
+                                section=section,
+                                form_type=form_type
+                            )
+
 
         # Clean up the uploaded file
-        if name_not_found:
+        if unfound_courses:
             fs.delete(filename)
             messages.error(request, '課程無法對應資料庫：' + ', '.join(unfound_courses))
             return redirect('updateData')
@@ -463,6 +473,25 @@ def process_excel_form(request):
         return redirect('updateData')
 
     return render(request, 'updateData.html')
+
+def truncate_table(model):
+    with connection.cursor() as cursor:
+        table_name = model._meta.db_table
+        cursor.execute(f'TRUNCATE TABLE `{table_name}`')
+
+def truncate_data(request):
+    if request.method == 'POST':
+        model_name = request.POST.get('model')
+        if model_name == 'Selection':
+            truncate_table(Selection)
+            messages.success(request, '學員選課資料已刪除')
+        elif model_name == 'SelectionResult':
+            truncate_table(SelectionResult)
+            messages.success(request, '志願結果已刪除')
+        else:
+            messages.error(request, '無效的模型名稱')
+
+    return redirect('updateData')
 
 def process_selection_results(request):
     if request.method == 'POST':
@@ -496,7 +525,8 @@ def process_selection_results(request):
                         if selection.std.std_id not in assigned_students:
                             SelectionResult.objects.create(
                                 std=selection.std,
-                                course=course,
+                                content_type=ContentType.objects.get_for_model(course),
+                                object_id=course.course_id,
                                 section=section,
                                 form_type=selection.form_type
                             )
@@ -525,7 +555,8 @@ def process_selection_results(request):
                         for selection in available_selections:
                             SelectionResult.objects.create(
                                 std=selection.std,
-                                course=course,
+                                content_type=ContentType.objects.get_for_model(course),
+                                object_id=course.course_id,
                                 section=section,
                                 form_type=selection.form_type
                             )
@@ -536,7 +567,8 @@ def process_selection_results(request):
                         for selection in selected_students:
                             SelectionResult.objects.create(
                                 std=selection.std,
-                                course=course,
+                                content_type=ContentType.objects.get_for_model(course),
+                                object_id=course.course_id,
                                 section=section,
                                 form_type=selection.form_type
                             )
@@ -545,13 +577,109 @@ def process_selection_results(request):
         messages.success(request, '選課結果已處理完成')
         return redirect('result')
     return redirect('result')  
-# 測試志願選填系統
-# from django_app.models import SelectionResult, Selection
-# test_std_id = 1
-# result_instance = SelectionResult.objects.filter(std_id=test_std_id)
-# for result in result_instance:
-#     selection = Selection.objects.get(std = result.std, course_id=result.course.course_id)
-#     print('priority:', selection.priority)
+
+# from django_app.models import Selection, SelectionResult
+
+# # Iterate over all SelectionResult objects
+# for selection_result in SelectionResult.objects.all():
+#     student = selection_result.std
+#     course_id = selection_result.object_id
+#     section = selection_result.section
+
+#     # Find the corresponding Selection object for the student and course
+#     try:
+#         selection = Selection.objects.get(std=student, course_id=course_id, section=section)
+#         if selection.priority >= 3:
+#             print(f"Student ID: {student.std_id}, Priority: {selection.priority}, Course ID: {course_id}")
+#     except Selection.DoesNotExist:
+#         print(f"No selection found for Student ID: {student.std_id}, Course ID: {course_id}")
+
+def check_priority(request):
+
+    reaponse_content = ""
+    for student in Student.objects.all():
+        result_instance = SelectionResult.objects.filter(std_id=student.std_id)
+        if not result_instance:
+            response_content = f"""
+                未填志願：{student.std_id}{student.std_name}
+            """
+            reaponse_content += response_content
+        for result in result_instance:
+            selection = Selection.objects.get(std = result.std, course_id = result.object_id)
+            if selection.priority >= 3:
+                response_content = f"""
+                
+                    Student: {selection.std.std_id}
+                    ,Course: {selection.course_id}
+                    ,Section: {selection.section.section_id}
+                    ,Priority: {selection.priority}
+                
+                """
+                reaponse_content += response_content
+    return render(request, 'check_priority.html', {'response_content': response_content})
+
+def print_results_table(request):
+    # Gather data
+    if request.method == 'POST':
+        stage = request.POST['stage']
+        selection_range = AdminSetting.objects.get(setting_name='J1stRange').configuration
+        if stage == "1":
+            sections = Section.objects.filter(section_id__lte=selection_range).order_by('section_id')
+        else:
+            sections = Section.objects.filter(section_id__gt=selection_range).order_by('section_id')
+        students = Student.objects.all().order_by('team', 'std_id')
+        selection_results = SelectionResult.objects.filter(section__in=sections)
+        
+        # Organize data
+        Junior_data = {}
+        High_data = {}
+        for student in students.filter(j_or_h='J'):
+            team = student.team
+            team_display = Student.TEAM_CHOICES[team-1][1]
+            if team not in Junior_data:
+                Junior_data[team] = {'students': [], 'results': {}, 'team_display': team_display}
+            Junior_data[team]['students'].append(student)
+            for section in sections:
+                if section.section_id not in Junior_data[team]['results']:
+                    Junior_data[team]['results'][section.section_id] = {}
+                result = selection_results.filter(std=student, section=section).first()
+                if result:
+                    Junior_data[team]['results'][section.section_id][student.std_id] = result.course.course_name
+                    print(Junior_data[team]['results'][section.section_id][student.std_id])
+                else:
+                    print('No result found for student', student.std_id, 'in section', section.section_id)
+                    Junior_data[team]['results'][section.section_id][student.std_id] = ''
+        for student in students.filter(j_or_h='H'):
+            team = student.team
+            team_display = Student.TEAM_CHOICES[team-1][1]
+            if team not in High_data:
+                High_data[team] = {'students': [], 'results': {}, 'team_display': team_display}
+            High_data[team]['students'].append(student)
+            for section in sections:
+                if section.section_id not in High_data[team]['results']:
+                    High_data[team]['results'][section.section_id] = {}
+                result = selection_results.filter(std=student, section=section).first()
+                if result:
+                    High_data[team]['results'][section.section_id][student.std_id] = result.course.course_name
+                    print(High_data[team]['results'][section.section_id][student.std_id])
+                else:
+                    print('No result found for student', student.std_id, 'in section', section.section_id)
+                    High_data[team]['results'][section.section_id][student.std_id] = ''
+
+        return render(request, 'print_results_table.html', {
+            'sections': sections,
+            'Junior_data': Junior_data,
+            'High_data': High_data,
+        })
+
+# from django_app.models import SelectionResult, Selection, Course
+# test_course_id = 1
+# course = Course.objects.get(course_id=test_course_id)
+# print('人數限制：', course.std_limit)
+# count = SelectionResult.objects.filter(course.course_id=test_course_id).count()
+# print('分配到的人：', count)
+# print(course.std_limit >= count)
+
 
 
 # ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠟⠛⠋⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠙⠛⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿

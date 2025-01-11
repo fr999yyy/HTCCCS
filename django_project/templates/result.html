@@ -51,8 +51,12 @@
                         <div class="col">
                             <h3>第一次選課</h3>
                             <a href="" class="d-block">下載點名用表</a>
-                            <a href="" class="d-block">下載選課結果</a>
-                        </div>  
+                            <form method="POST" action="{% url 'print_results_table' %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="stage" value="1">
+                                <button type="submit" class="btn btn-link p-0 m-0 align-baseline">下載選課結果</button>
+                            </form>
+                        </div>
                     </div>
                     <div class="row mb-3 col-6 g-3">
                         <form method="POST" action="{% url 'process_selection_results'%}" class="col-2">

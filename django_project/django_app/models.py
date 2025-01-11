@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 # Create your models here.
 
@@ -107,7 +109,9 @@ class Selection(models.Model):
 
 class SelectionResult(models.Model):
     std = models.ForeignKey(Student, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True, blank=True)
+    object_id = models.PositiveIntegerField()
+    course = GenericForeignKey('content_type', 'object_id')
     section = models.ForeignKey(Section, on_delete=models.CASCADE)
     form_type = models.CharField(max_length=2, default='J1')
 
