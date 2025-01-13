@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 
 # Create your models here.
@@ -85,6 +85,8 @@ class Course(models.Model):
     std_limit = models.IntegerField(default=25)
     course_type = models.CharField(max_length=2)
     section_id = models.ForeignKey(Section, on_delete=models.CASCADE, null=True)
+    selection_results = GenericRelation('SelectionResult')
+
 
     def __str__(self):
         return self.course_name

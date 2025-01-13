@@ -510,16 +510,16 @@ def process_selection_results(request):
             all_courses_in_section = courses_in_section + special_courses_in_section
 
             # 優先排序連堂的第二堂課
-            all_courses_in_section.sort(key=lambda x: (x.course_type != 'na', x.course_id))
+            all_courses_in_section.sort(key=lambda x: (x.course_type != 'NA', x.course_type != 'H', x.course_id))
 
 
             for course in all_courses_in_section:
-                if course.course_type == 'na':
+                if course.course_type == 'NA':
                     # 連堂的第二堂課id = 第一堂課id + 1
                     # 優先處理連堂的第二堂課
                     previous_course_id = course.course_id - 1
                     previous_course = Course.objects.get(course_id=previous_course_id)
-                    previous_selections = SelectionResult.objects.filter(course=previous_course)
+                    previous_selections = previous_course.selection_results.all()
 
                     for selection in previous_selections:
                         if selection.std.std_id not in assigned_students:
@@ -531,8 +531,52 @@ def process_selection_results(request):
                                 form_type=selection.form_type
                             )
                             assigned_students.add(selection.std.std_id)
-
             # Process other courses based on priorities
+
+            for priority in range(1, 6): 
+                # Check if the number of unassigned students is less than or equal to the total student limit of the course
+                all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
+                unassigned_students = all_students - assigned_students
+                if len(unassigned_students) <= course.std_limit and course.course_type not in ['H', 'NA']:
+                    print(f"filter is working!")
+                    continue
+                for course in [c for c in all_courses_in_section if c.course_type == 'H']:
+                    if course.course_id not in vacancy:
+                        vacancy[course.course_id] = course.std_limit
+
+                    selections = Selection.objects.filter(
+                        section=section,
+                        course_id=course.course_id,
+                        priority=priority
+                    )
+
+                    available_selections = [s for s in selections if s.std.std_id not in assigned_students]
+
+                    if len(available_selections) <= vacancy[course.course_id]:
+                        for selection in available_selections:
+                            SelectionResult.objects.create(
+                                std=selection.std,
+                                content_type=ContentType.objects.get_for_model(course),
+                                object_id=course.course_id,
+                                section=section,
+                                form_type=selection.form_type
+                            )
+                            assigned_students.add(selection.std.std_id)
+                            vacancy[course.course_id] -= 1
+                    else:
+                        selected_students = random.sample(available_selections, vacancy[course.course_id])
+                        for selection in selected_students:
+                            SelectionResult.objects.create(
+                                std=selection.std,
+                                content_type=ContentType.objects.get_for_model(course),
+                                object_id=course.course_id,
+                                section=section,
+                                form_type=selection.form_type
+                            )
+                            assigned_students.add(selection.std.std_id)
+                        vacancy[course.course_id] = 0
+                
+                
             for priority in range(1, 6): 
 
                 for course in all_courses_in_section:
@@ -540,7 +584,7 @@ def process_selection_results(request):
                     if course.course_id not in vacancy:
                         vacancy[course.course_id] = course.std_limit
 
-                    if course.course_type == 'na' or vacancy[course.course_id] == 0:
+                    if course.course_type == 'NA' or vacancy[course.course_id] == 0:
                         continue
 
                     selections = Selection.objects.filter(
@@ -574,6 +618,12 @@ def process_selection_results(request):
                             )
                             assigned_students.add(selection.std.std_id)
                         vacancy[course.course_id] = 0
+            # Debugging: Check for unassigned students
+            all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
+            unassigned_students = all_students - assigned_students
+            if unassigned_students:
+                print(f"Unassigned students in section {section.section_id}: {unassigned_students}")
+            
         messages.success(request, '選課結果已處理完成')
         return redirect('result')
     return redirect('result')  
@@ -593,30 +643,6 @@ def process_selection_results(request):
 #             print(f"Student ID: {student.std_id}, Priority: {selection.priority}, Course ID: {course_id}")
 #     except Selection.DoesNotExist:
 #         print(f"No selection found for Student ID: {student.std_id}, Course ID: {course_id}")
-
-def check_priority(request):
-
-    reaponse_content = ""
-    for student in Student.objects.all():
-        result_instance = SelectionResult.objects.filter(std_id=student.std_id)
-        if not result_instance:
-            response_content = f"""
-                未填志願：{student.std_id}{student.std_name}
-            """
-            reaponse_content += response_content
-        for result in result_instance:
-            selection = Selection.objects.get(std = result.std, course_id = result.object_id)
-            if selection.priority >= 3:
-                response_content = f"""
-                
-                    Student: {selection.std.std_id}
-                    ,Course: {selection.course_id}
-                    ,Section: {selection.section.section_id}
-                    ,Priority: {selection.priority}
-                
-                """
-                reaponse_content += response_content
-    return render(request, 'check_priority.html', {'response_content': response_content})
 
 def print_results_table(request):
     # Gather data
