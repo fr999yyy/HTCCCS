@@ -10,6 +10,10 @@ from django.db import connection
 from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult
 import pandas as pd
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.decorators import user_passes_test
+import openpyxl
+from openpyxl.styles import Alignment, PatternFill, Font, Border, Side
+from openpyxl.utils import get_column_letter
 
 
 
@@ -19,6 +23,9 @@ from django.contrib.contenttypes.models import ContentType
 
 def index(request):
     return render(request, 'index.html')
+
+def is_admin(user):
+    return user.is_superuser
 
 def stdLogin(request):
     if request.session.has_key('std_id'):
@@ -53,6 +60,24 @@ def stdLogin(request):
     else:
         return render(request, 'stdLogin.html')
 
+def csLogin(request):
+    # if request.user.is_authenticated:
+    #     return redirect('/dashboard')
+    if request.method == 'POST':
+        if not request.POST['password']:
+            messages.error(request, '請輸入密碼')
+            return redirect('/csLogin')
+        password = request.POST['password']
+
+        user = auth.authenticate(username='admin', password=password)
+
+        if user is not None:
+            auth.login(request, user)
+            return redirect('/dashboard')
+        else:
+            return redirect('/csLogin')
+    else:
+        return render(request, 'csLogin.html')
 def vLogin(request):
     # if request.user.is_authenticated:
     #     return redirect('/dashboard')
@@ -77,7 +102,7 @@ def dashboard(request):
         db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
         return render(request, 'dashboard.html', {'db_name': db_name})
     else:
-        return redirect('/vLogin')
+        return redirect('/csLogin')
 
 def result(request):
     db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
@@ -212,6 +237,108 @@ def upload_zip(request):
         messages.success(request, '資料匯入已完成')
         return redirect('updateData')
     return redirect('updateData')
+
+
+
+def generate_xlsx(request):
+    if request.method == 'POST':
+        stage = request.POST['stage']
+        selection_range = AdminSetting.objects.get(setting_name='J1stRange').configuration
+        if stage == "1":
+            sections = Section.objects.filter(section_id__lte=selection_range).order_by('section_id')
+        else:
+            sections = Section.objects.filter(section_id__gt=selection_range).order_by('section_id')
+    # Create a workbook and add a worksheet for each section
+    wb = openpyxl.Workbook()
+
+    for section in sections:
+        ws = wb.create_sheet(title=f"{section.section_display}")
+
+        notation = [
+            ("標示：", ""),
+            ("國中部", "B3CEFA"),  # Junior
+            ("高中部", "D2F1DA"),  # High
+            ("CIT", ""),  # CIT
+            ("", ""),
+            ("solo：", ""),
+            ("solo1", "FFFF00"),  # Yellow
+            ("solo2", "FFA500"),  # Orange
+            ("solo3", "D8BFD8"),  # Light Purple
+        ]
+        for row_num, (text, fill_color) in enumerate(notation, start=1):
+            ws[f"A{row_num}"] = text
+            if fill_color:
+                ws[f"A{row_num}"].fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+
+        # Get all courses in the section
+        courses = list(Course.objects.filter(section_id=section.section_id)) + list(SpecialCourse.objects.filter(section_id=section.section_id))
+
+        col_num = 3
+        for course in courses:
+            # Add course name, classroom, and TA
+            ws.merge_cells(start_row=3, start_column=col_num, end_row=3, end_column=col_num+4)
+            ws.merge_cells(start_row=4, start_column=col_num, end_row=4, end_column=col_num+4)
+            ws.merge_cells(start_row=5, start_column=col_num, end_row=5, end_column=col_num+4)
+            ws[f"{get_column_letter(col_num)}3"] = course.course_name
+            ws[f"{get_column_letter(col_num)}3"].font = Font(bold=True)
+            ws[f"{get_column_letter(col_num)}4"] = "classroom"
+            ws[f"{get_column_letter(col_num)}4"].font = Font(bold=True)
+            ws[f"{get_column_letter(col_num)}5"] = "TA"
+            ws[f"{get_column_letter(col_num)}5"].font = Font(bold=True)
+
+            # Center align course_name, classroom, and TA
+            for row in range(3, 6):
+                ws[f"{get_column_letter(col_num)}{row}"].alignment = Alignment(horizontal="center")
+
+            # Add table headers
+            headers = ["人數", "學員", "SATB", "小隊", "點名格"]
+            for i, header in enumerate(headers):
+                ws[f"{get_column_letter(col_num + i)}6"] = header
+
+            row_num = 7
+
+            # Get all students in the course
+            selections = SelectionResult.objects.filter(object_id=course.course_id).select_related('std').order_by('std__satb', 'std__j_or_h', 'std__team', 'std__std_name')
+            for idx, selection in enumerate(selections, start=1):
+                student = selection.std
+                row = [
+                    idx,
+                    student.std_name,
+                    student.satb,
+                    student.team,
+                    ""  # Placeholder for attendance checkbox
+                ]
+                for i, cell_value in enumerate(row):
+                    ws[f"{get_column_letter(col_num + i)}{row_num}"] = cell_value
+
+                # Apply background color based on j_or_h
+                if student.j_or_h == 'H':
+                    fill_color = "D2F1DA"
+                elif student.j_or_h == 'J':
+                    fill_color = "B3CEFA"
+                elif student.std_tag == 'CIT':
+                    fill_color = ""
+                for col in range(col_num, col_num + 5):
+                    ws[f"{get_column_letter(col)}{row_num}"].fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+
+                # Apply text color if student has tag "gr"
+                if student.std_tag == "gr":
+                    ws[f"{get_column_letter(col_num + 1)}{row_num}"].font = Font(color="FF0000")
+
+                row_num += 1
+
+
+            col_num += 6  # Move to the next set of columns for the next course
+
+    # Remove the default sheet created by openpyxl
+    wb.remove(wb['Sheet'])
+
+    # Save the workbook to a response
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename=selection_results.xlsx'
+    wb.save(response)
+
+    return response
 
 
 def pSel(request):
@@ -479,6 +606,7 @@ def truncate_table(model):
         table_name = model._meta.db_table
         cursor.execute(f'TRUNCATE TABLE `{table_name}`')
 
+@user_passes_test(is_admin)
 def truncate_data(request):
     if request.method == 'POST':
         model_name = request.POST.get('model')
@@ -538,7 +666,6 @@ def process_selection_results(request):
                 all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
                 unassigned_students = all_students - assigned_students
                 if len(unassigned_students) <= course.std_limit and course.course_type not in ['H', 'NA']:
-                    print(f"filter is working!")
                     continue
                 for course in [c for c in all_courses_in_section if c.course_type == 'H']:
                     if course.course_id not in vacancy:

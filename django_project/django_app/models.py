@@ -11,6 +11,14 @@ class CustomUser(AbstractUser):
     std_id = models.CharField(max_length=100, unique=True)
     team = models.CharField(max_length=100)
     satb = models.CharField(max_length=100)
+    
+    class Meta:
+        permissions = [
+            ('is_student', 'Student'),
+            ('is_volunteer', 'Volunteer'),
+            ('is_cs', 'Course Selection'),
+            ('is_admin', 'Admin'),
+        ]
 
 class Student(models.Model):
     TEAM_CHOICES = [
