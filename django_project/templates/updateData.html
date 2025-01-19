@@ -42,7 +42,7 @@
                     <h1 class="display-6">修改資料</h1>
                 </div> 
                 <div class="my-4 pt-3 text-start">
-                    <div class="row g-5 col-6">
+                    <div class="row g-5 col-9">
                         <div class="col">
                             <form method="POST" enctype="multipart/form-data" action="{% url 'upload_zip' %}">
                                 {% csrf_token %}
@@ -52,14 +52,18 @@
                             </form>
                         </div>
                         <div class="col">
+                            <form method="POST" enctype="multipart/form-data" action="{% url 'upload_result_change' %}">
+                                {% csrf_token %}
+                                <label for="upload_result_change" class="form-label">上傳志願修改表</label>
+                                <input type="file" class="form-control" name="upload_result_change" id="upload_result_change" accept=".xlsx">
+                                <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
+                            </form>
+                        </div>
+                        <div class="col">
                             <form method="POST" enctype="multipart/form-data" action="{% url 'process_excel_form' %}">
                                 {% csrf_token %}
                                 <label for="upload_excel_form" class="form-label">上傳 Google 志願選填表單</label>
                                 <input type="file" class="form-control" name="upload_excel_form" id="upload_excel_form" accept=".xlsx">
-                                <!-- <select class="form-select mt-2" style="width: auto;" name="stage" id="stage">
-                                    <option value="1" id="JuniorStage1">第一次選課</option>
-                                    <option value="2" id="JuniorStage2">第二次選課</option>
-                                </select> -->
                                 <button type="submit" class="btn btn-primary mt-2">上傳檔案</button>
                             </form>
                         </div>

@@ -26,9 +26,9 @@
         </header>
         <main>
             <div class="d-flex justify-content-center align-self-center">
-                <form method="POST" action="{% url 'csLogin' %}" class="loginBox text-center bg-light ">
+                <form method="POST" action="{% url 'vLogin' %}" class="loginBox text-center bg-light ">
                     {% csrf_token %}
-                    <span class="display-3">選課組登入</span>
+                    <span class="display-3">志工登入</span>
                     <!-- Buttons Section -->
                         <div class="mb-3 pt-5 text-start">
                             <label for="pwdInput" class="form-label text-start lead">密碼</label>
@@ -48,8 +48,8 @@
                             <div class="d-flex flex-row justify-content-center">
                               <button
                               type="submit"
-                              name="csLogin"
-                              id="csLogin"
+                              name="vLogin"
+                              id="vLogin"
                               class="btn btn-lg btn-primary m-3 p-2"
                               >登入</button>
                               <a href="{% url 'index' %}" class="btn btn-lg btn-secondary m-3 p-2">回到首頁</a>

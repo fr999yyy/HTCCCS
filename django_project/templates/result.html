@@ -70,8 +70,16 @@
                         </form>
                         <div class="col">
                             <h3>第二次選課</h3>
-                            <a href="" class="d-block">下載點名總表</a>
-                            <a href="" class="d-block">下載選課結果</a>
+                            <form method="POST" action="{% url 'generate_xlsx' %}" class="d-block">
+                                {% csrf_token %}
+                                <input type="hidden" name="stage" value="2">
+                                <button type="submit" class="btn btn-link p-0 m-0 align-baseline">下載點名總表</button>
+                            </form>
+                            <form method="POST" action="{% url 'print_results_table' %}" class="d-block">
+                                {% csrf_token %}
+                                <input type="hidden" name="stage" value="2">
+                                <button type="submit" class="btn btn-link p-0 m-0 align-baseline">下載選課結果</button>
+                            </form>
                         </div>  
                     </div>
                  </div>

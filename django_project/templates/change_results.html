@@ -1,0 +1,150 @@
+{% load static %}
+{% load filters%}
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>選課系統後台</title>
+        <!-- Required meta tags -->
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, shrink-to-fit=no"
+        />
+        <link rel="stylesheet" href="{% static 'style.css' %}">
+        <!-- Bootstrap CSS v5.2.1 -->
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+            rel="stylesheet"
+            integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+            crossorigin="anonymous"
+        />
+        <!-- BS5 Icon -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    </head>
+
+    <body>
+        {% include 'dashboard_navbar.html' %}
+
+            {% for message in messages %}
+                {% if message.tags == 'error' %}
+                    <div class="alert alert-danger alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
+                    <strong></strong> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% elif message.tags == 'success' %}
+                    <div class="alert alert-success alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
+                    <strong></strong> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endif %}
+            {% endfor %}
+            <div class="container">
+                <main class="mt-5 pt-1">
+                    <div class="text-start my-3">
+                        <h1 class="display-6">更改志願</h1>
+                        <div class="my-3 row col-6 text-start">
+                            <div class="col">
+                                <label for="section" class="form-label lead">節次</label>
+                                <select
+                                    class="form-control"
+                                    name="section"
+                                    id="section"
+                                >
+                                    <option value="1" id="section1">第一節</option>
+                                    <option value="2" id="section2">第二節</option>
+                                    <option value="3" id="section3">第三節</option>
+                                    <option value="4" id="section4">第四節</option>
+                                    <option value="5" id="section5">第五節</option>
+                                    <option value="6" id="section6">第六節</option>
+                                    <option value="7" id="section7">第七節</option>
+                                    <option value="8" id="section8">第八節</option>
+                                    <option value="9" id="section9">第九節</option>
+                                    <option value="10" id="section10">第十節</option>
+                                    <option value="11" id="section11">第十一節</option>
+                                    <option value="12" id="section12">第十二節</option>
+                                </select>
+                            </div>
+                            <div class="col d-flex align-items-end">
+                                <button type="button" class="btn btn-primary mx-1" id="add_change_result_row">+</button>
+                                <button type="submit" class="btn btn-primary mx-1">更改</button>
+                            </div>
+                        </div>
+                        <div id="change_result_container">
+                            <div class="row col-6 p-2 my-2 border border-secondary rounded bg-light align-items-center change_result_row">
+                                <div class="col" id="std_name_div">
+                                    <input class="form-control" list="names" name="std_name" placeholder="學員名稱">
+                                    <datalist id="names">
+                                        {% for name in names %}
+                                            <option value="{{ name }}">{{ name }}</option>
+                                        {% endfor %}
+                                    </datalist>
+                                </div>
+                                <i class="bi bi-arrow-right col-1" style="font-size: 1.5rem;"></i>
+                                <div class="col" id="course_div">
+                                    <select class="form-control" name="course">
+                                        {% for course in courses %}
+                                            <option value="{{ course.course_id }}">{{ course.course_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>  
+
+                    </div> 
+                    
+        </main>
+        <footer>
+            <!-- place footer here -->
+        </footer>
+        <script>
+
+            document.getElementById('add_change_result_row').addEventListener('click', function() {
+                // Clone the existing row
+                var container = document.getElementById('change_result_container');
+                var newRow = container.querySelector('.change_result_row').cloneNode(true);
+                
+                // Clear the input values in the cloned row
+                newRow.querySelector('input[name="std_name"]').value = '';
+                newRow.querySelector('select[name="course"]').selectedIndex = 0;
+                
+                // Append the cloned row to the container
+                container.appendChild(newRow);
+            });
+            document.getElementById('section').addEventListener('change', function() {
+            var sectionValue = this.value;
+            fetch(`/courses_lookup/?section_id=${sectionValue}`)
+                .then(response => response.json())
+                .then(data => {
+                    var courseSelect = document.querySelector('select[name="course"]');
+                    courseSelect.innerHTML = '';
+                    data.courses.forEach(course => {
+                        var option = document.createElement('option');
+                        option.value = course.course_id;
+                        option.textContent = course.course_name;
+                        courseSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }); 
+            document.addEventListener('DOMContentLoaded', function() {
+                var sectionSelect = document.getElementById('section');
+                var sectionId = "{{ section_id }}";
+                if (sectionId) {
+                    sectionSelect.value = sectionId;
+                }
+            });
+        </script>
+                <!-- Bootstrap JavaScript Libraries -->
+                <script
+                src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+                integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+                crossorigin="anonymous"
+            ></script>
+    
+            <script
+                src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"
+                integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+"
+                crossorigin="anonymous"
+            ></script>
+    </body>
+</html>

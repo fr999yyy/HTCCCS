@@ -45,8 +45,8 @@ class Student(models.Model):
     std_id = models.IntegerField(primary_key=True)
     std_name = models.CharField(max_length=10, null=True)
     team = models.IntegerField(choices=TEAM_CHOICES, null=True)
-    satb = models.CharField(max_length=1, choices=[('S', 'S'), ('A', 'A'), ('T', 'T'), ('B', 'B')], null=True)
-    j_or_h = models.CharField(max_length=1, choices=J_OR_H_CHOICES, null=True)
+    satb = models.CharField(max_length=1, choices=[('S', 'S'), ('A', 'A'), ('T', 'T'), ('B', 'B')], null=True, blank=True)
+    j_or_h = models.CharField(max_length=1, choices=J_OR_H_CHOICES, null=True, blank=True)
     std_tag = models.CharField(max_length=15, blank=True, null=True)
     form1_completed = models.BooleanField(default=False)  # New field for 1st form completion
     form2_completed = models.BooleanField(default=False)  # New field for 2nd form completion

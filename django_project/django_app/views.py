@@ -7,7 +7,7 @@ import zipfile, csv, shutil, os
 import random
 from django.core.files.storage import FileSystemStorage
 from django.db import connection
-from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult
+from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult, CustomUser
 import pandas as pd
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import user_passes_test
@@ -22,7 +22,20 @@ from openpyxl.utils import get_column_letter
 
 
 def index(request):
-    return render(request, 'index.html')
+    # user = request.user
+    # if not user.is_anonymous:
+    #     print(user)
+    #     if user.has_perm('django_app.is_student'):
+    #         return redirect('/pSel')
+    #     elif user.has_perm('django_app.is_volunteer'):
+    #         return redirect('/volunteer_dashboard')
+    #     elif user.has_perm('django_app.is_cs'):
+    #         return redirect('/dashboard')
+    #     elif user.has_perm('django_app.is_admin'):
+    #         return redirect('/dashboard')
+    # else:
+    #     print('anonymous')
+    return render(request, 'index.html')    
 
 def is_admin(user):
     return user.is_superuser
@@ -60,9 +73,7 @@ def stdLogin(request):
     else:
         return render(request, 'stdLogin.html')
 
-def csLogin(request):
-    # if request.user.is_authenticated:
-    #     return redirect('/dashboard')
+def csLogin(request): # 選課組登入
     if request.method == 'POST':
         if not request.POST['password']:
             messages.error(request, '請輸入密碼')
@@ -75,34 +86,157 @@ def csLogin(request):
             auth.login(request, user)
             return redirect('/dashboard')
         else:
+            messages.error(request, '密碼錯誤，請重新輸入')
             return redirect('/csLogin')
     else:
         return render(request, 'csLogin.html')
+
 def vLogin(request):
-    # if request.user.is_authenticated:
-    #     return redirect('/dashboard')
     if request.method == 'POST':
         if not request.POST['password']:
             messages.error(request, '請輸入密碼')
             return redirect('/vLogin')
         password = request.POST['password']
 
-        user = auth.authenticate(username='admin', password=password)
+        user = auth.authenticate(username='volunteer', password=password)
 
         if user is not None:
             auth.login(request, user)
-            return redirect('/dashboard')
+            print('login success')
+            return redirect('volunteer_dashboard')
         else:
+            messages.error(request, '密碼錯誤，請重新輸入')
+            print('pwd wrong')
             return redirect('/vLogin')
     else:
+        print('login failed')
         return render(request, 'vLogin.html')
+
+def volunteer_dashboard(request):
+    return render(request, 'volunteer_dashboard.html')
 
 def dashboard(request):
     if request.user.is_authenticated:
         db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
         return render(request, 'dashboard.html', {'db_name': db_name})
     else:
+        print('not authenticated')
         return redirect('/csLogin')
+
+def selection_lookup(request):
+    if request.method == 'POST':
+        std_name = request.POST['std_name']
+        section_id = request.POST['section_id']
+        student = Student.objects.get(std_name = std_name)
+        section = Section.objects.get(section_id=section_id)
+        courses_in_section = list(Course.objects.filter(section_id=section.section_id))
+        special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section.section_id))
+        all_courses_in_section = courses_in_section + special_courses_in_section
+        selections = Selection.objects.filter(std=student, section=section)
+
+        # Extract course names from the selections
+        selection_details = []
+        for selection in selections:
+            course_name = None
+            if Course.objects.filter(course_id=selection.course_id).exists():
+                course_name = Course.objects.get(course_id=selection.course_id).course_name
+            elif SpecialCourse.objects.filter(course_id=selection.course_id).exists():
+                course_name = SpecialCourse.objects.get(course_id=selection.course_id).course_name
+            selection_details.append({
+                'priority': selection.priority,
+                'course_name': course_name
+            })
+
+        return render(request, 'selection_lookup.html', {
+            'names': list(Student.objects.values_list('std_name', flat=True)),
+            'selection_details': selection_details,
+            'section': section.section_display,
+            'student': student.std_name
+        })
+        
+    names = Student.objects.values_list('std_name', flat=True)
+    return render(request, 'selection_lookup.html', {'names': list(names)})
+
+def upload_result_change(request):
+        if request.method == 'POST' and request.FILES.get('result_change_file'):
+            result_change_file = request.FILES['result_change_file']
+            wb = openpyxl.load_workbook(result_change_file)
+            sheet = wb.active
+
+            changes = []
+            errors = False
+
+            for row in sheet.iter_rows(min_row=2, values_only=True):  # Assuming the first row is the header
+                section_id, student_name, course_name = row
+
+                try:
+                    student = Student.objects.get(std_name=student_name)
+                    section = Section.objects.get(section_id=section_id)
+                    selection_result = SelectionResult.objects.get(std=student, section=section)
+
+                    # Get the course_id from Course or SpecialCourse
+                    course = Course.objects.filter(course_name=course_name).first()
+                    if not course:
+                        course = SpecialCourse.objects.filter(course_name=course_name).first()
+
+                    if course:
+                        changes.append({
+                            'selection_result': selection_result,
+                            'course': course
+                        })
+                    else:
+                        messages.error(request, f"Course '{course_name}' not found for student '{student_name}' in section '{section_id}'.")
+                        errors = True
+
+                except Student.DoesNotExist:
+                    messages.error(request, f"Student '{student_name}' not found.")
+                    errors = True
+                except Section.DoesNotExist:
+                    messages.error(request, f"Section '{section_id}' not found.")
+                    errors = True
+                except SelectionResult.DoesNotExist:
+                    messages.error(request, f"SelectionResult not found for student '{student_name}' in section '{section_id}'.")
+                    errors = True
+
+            if not errors:
+                # Apply changes
+                for change in changes:
+                    selection_result = change['selection_result']
+                    course = change['course']
+                    selection_result.object_id = course.pk
+                    selection_result.content_type = ContentType.objects.get_for_model(course)
+                    selection_result.save()
+
+                messages.success(request, '志願結果已更改')
+            else:
+                messages.error(request, '錯誤發生，請檢查上傳的檔案。')
+
+            return redirect('change_results')
+
+        return render(request, 'upload_result_change.html')
+
+
+def change_results(request):
+    section_id = request.GET.get('section_id')
+    if section_id is None:
+        section_id = 1
+    courses_in_section = list(Course.objects.filter(section_id=section_id).values('course_id', 'course_name'))
+    special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section_id).values('course_id', 'course_name'))
+    all_courses_in_section = courses_in_section + special_courses_in_section
+        
+    return render(request, 'change_results.html', {
+        'names': list(Student.objects.values_list('std_name', flat=True)),
+        'section_id': section_id,
+        'courses': all_courses_in_section
+    })
+
+def courses_lookup(request):
+    section_id = request.GET.get('section_id')
+    courses_in_section = list(Course.objects.filter(section_id=section_id).values('course_id', 'course_name'))
+    special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section_id).values('course_id', 'course_name'))
+    all_courses_in_section = courses_in_section + special_courses_in_section
+
+    return JsonResponse({'courses': all_courses_in_section})
 
 def result(request):
     db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
@@ -240,7 +374,7 @@ def upload_zip(request):
 
 
 
-def generate_xlsx(request):
+def generate_xlsx(request): # 下載點名總表
     if request.method == 'POST':
         stage = request.POST['stage']
         selection_range = AdminSetting.objects.get(setting_name='J1stRange').configuration
@@ -312,12 +446,12 @@ def generate_xlsx(request):
                     ws[f"{get_column_letter(col_num + i)}{row_num}"] = cell_value
 
                 # Apply background color based on j_or_h
-                if student.j_or_h == 'H':
+                if student.std_tag == 'CIT':
+                    fill_color = "FFFFFF"
+                elif student.j_or_h == 'H':
                     fill_color = "D2F1DA"
                 elif student.j_or_h == 'J':
                     fill_color = "B3CEFA"
-                elif student.std_tag == 'CIT':
-                    fill_color = ""
                 for col in range(col_num, col_num + 5):
                     ws[f"{get_column_letter(col)}{row_num}"].fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
 
@@ -518,8 +652,13 @@ def stdLogout(request):
     std_logout(request)
     return redirect('/stdLogin')
 
+def logout(request):
+    std_logout(request)
+    return redirect('index')
 
-def process_excel_form(request):
+
+
+def process_excel_form(request): # 處理志願表單
     if request.method == 'POST' and request.FILES.get('upload_excel_form'):
         excel_file = request.FILES['upload_excel_form']
         fs = FileSystemStorage()
@@ -621,7 +760,7 @@ def truncate_data(request):
 
     return redirect('updateData')
 
-def process_selection_results(request):
+def process_selection_results(request): # 處理志願結果
     if request.method == 'POST':
         processing_stage = request.POST['processing_stage']
         if processing_stage == '1': 
@@ -665,8 +804,6 @@ def process_selection_results(request):
                 # Check if the number of unassigned students is less than or equal to the total student limit of the course
                 all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
                 unassigned_students = all_students - assigned_students
-                if len(unassigned_students) <= course.std_limit and course.course_type not in ['H', 'NA']:
-                    continue
                 for course in [c for c in all_courses_in_section if c.course_type == 'H']:
                     if course.course_id not in vacancy:
                         vacancy[course.course_id] = course.std_limit
