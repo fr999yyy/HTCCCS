@@ -45,16 +45,7 @@
                     </div> 
                     <form method="POST" action="{% url 'selection_lookup' %}">
                         {% csrf_token %}
-                        <div class="row col-7 text-start">
-                            <div class="col">
-                                <label for="names" class="lead form-label">學員名稱</label>
-                                <input class="form-control" list="names" name="std_name" id="std_name">
-                                <datalist class="" id="names">
-                                    {% for name in names %}
-                                        <option value="{{ name }}">{{ name }}</option>
-                                    {% endfor %}
-                                </datalist>
-                            </div>
+                        <div class="row col text-start">
                             <div class="col">
                                     <label for="SelectionStage" class="lead form-label">節次</label>
                                     <div>
@@ -73,7 +64,23 @@
                                             <option value="12" id="section12">第十二節</option>
                                         </select>
                                     </div>
-                                    
+                            </div>
+                            <div class="col">
+                                <label for="course" class="lead form-label">範圍</label>
+                                <div>
+                                    <select class="form-select" name="input_course" id="input_course">
+                                        <option value="1" id="section1">第一節</option>
+
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <label for="course" class="lead form-label">標的</label>
+                                <div>
+                                    <select class="form-select" name="output_course" id="output_course">
+                                        <option value="1" id="section1">第一節</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="col d-flex align-items-end">
                                 <button type="submit" class="btn btn-primary">查詢</button>

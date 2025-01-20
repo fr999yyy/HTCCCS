@@ -41,37 +41,37 @@ def is_admin(user):
     return user.is_superuser
 
 def stdLogin(request):
-    if request.session.has_key('std_id'):
-            return redirect('/pSel')
     if request.method == 'POST':
-        if not request.POST['std_id'] or not request.POST['team'] or not request.POST['satb']:
+        if not request.POST['std_id'] or not request.POST['std_name']:
             messages.error(request, '請填寫所有欄位')
             return redirect('/stdLogin')
         std_id = request.POST['std_id']
-        team = request.POST['team']
-        satb = request.POST['satb']
-        current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
-        print(std_id, team, satb)
-        student = std_authenticate(std_id=std_id, team=team, satb=satb)
+        std_name = request.POST['std_name']
+        # team = request.POST['team']
+        # satb = request.POST['satb']
+        student = std_authenticate(std_id=std_id, std_name= std_name)
         student_instance = Student.objects.get(std_id=std_id)
-        if student_instance.form1_completed & (current_form_stage == 1):
-            messages.error(request, '你已經選過課囉！')
-            return redirect('/stdLogin')
-        if student_instance.form2_completed & (current_form_stage == 2):
-            messages.error(request, '你已經選過課囉！')
-            return redirect('/stdLogin')
+        select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
+
+
+        # if student_instance.form1_completed & (current_form_stage == 1):
+        #     messages.error(request, '你已經選過課囉！')
+        #     return redirect('/stdLogin')
+        # if student_instance.form2_completed & (current_form_stage == 2):
+        #     messages.error(request, '你已經選過課囉！')
+        #     return redirect('/stdLogin')
 
 
         if student is not None:
             std_login(request, student)
             print('login success')
-            return redirect ('/pSel')
+            return redirect ('std_index')
         else:
             messages.info(request, '無法登入，請檢查資料是否正確')
             print('login failed')
             return redirect('/stdLogin')
     else:
-        return render(request, 'stdLogin.html')
+        return render(request, 'stdLogin.html', {'names': list(Student.objects.values_list('std_name', flat=True))})
 
 def csLogin(request): # 選課組登入
     if request.method == 'POST':
@@ -148,7 +148,6 @@ def selection_lookup(request):
             })
 
         return render(request, 'selection_lookup.html', {
-            'names': list(Student.objects.values_list('std_name', flat=True)),
             'selection_details': selection_details,
             'section': section.section_display,
             'student': student.std_name
@@ -247,11 +246,13 @@ def updateData(request):
     J1stRange = AdminSetting.objects.get(setting_name='J1stRange').configuration
     H1stRange = AdminSetting.objects.get(setting_name='H1stRange').configuration
     SelectionStage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+    select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
     return render(request, 'updateData.html', {
         'db_name': db_name, 
         'J1stRange': J1stRange, 
         'H1stRange': H1stRange, 
-        'SelectionStage': SelectionStage
+        'SelectionStage': SelectionStage,
+        'select_before_camp': select_before_camp
         })
 
 def update_settings(request):
@@ -259,7 +260,14 @@ def update_settings(request):
         J1stRange = request.POST['J1stRange']
         H1stRange = request.POST['H1stRange']
         SelectionStage = request.POST['SelectionStage']
-        if J1stRange or H1stRange or SelectionStage == AdminSetting.objects.get(setting_name='SelectionStage').configuration:
+        select_before_camp = request.POST['select_before_camp']
+        print(select_before_camp)
+        if (J1stRange == AdminSetting.objects.get(setting_name='J1stRange').configuration and
+            H1stRange == AdminSetting.objects.get(setting_name='H1stRange').configuration and
+            SelectionStage == AdminSetting.objects.get(setting_name='SelectionStage').configuration and
+            select_before_camp == AdminSetting.objects.get(setting_name='select_before_camp').configuration):
+            print(AdminSetting.objects.get(setting_name='select_before_camp').configuration)
+            print('no change')
             return redirect('updateData')
         if (J1stRange and not J1stRange.isdigit()) or (J1stRange and not H1stRange.isdigit()):
             messages.error(request, '節次請輸入數字')
@@ -267,6 +275,7 @@ def update_settings(request):
         AdminSetting.objects.filter(setting_name='J1stRange').update(configuration=J1stRange) if J1stRange else None
         AdminSetting.objects.filter(setting_name='H1stRange').update(configuration=H1stRange) if H1stRange else None
         AdminSetting.objects.filter(setting_name='SelectionStage').update(configuration=SelectionStage)
+        AdminSetting.objects.filter(setting_name='select_before_camp').update(configuration=select_before_camp)
         messages.success(request, '設定已更新')
         return redirect('updateData')
     return redirect('updateData')
@@ -417,7 +426,7 @@ def generate_xlsx(request): # 下載點名總表
             ws[f"{get_column_letter(col_num)}3"].font = Font(bold=True)
             ws[f"{get_column_letter(col_num)}4"] = "classroom"
             ws[f"{get_column_letter(col_num)}4"].font = Font(bold=True)
-            ws[f"{get_column_letter(col_num)}5"] = "TA"
+            ws[f"{get_column_letter(col_num)}5"] = "助教："
             ws[f"{get_column_letter(col_num)}5"].font = Font(bold=True)
 
             # Center align course_name, classroom, and TA
@@ -474,6 +483,24 @@ def generate_xlsx(request): # 下載點名總表
 
     return response
 
+def std_index(request):
+    student = get_student(request.session.get('std_id'))
+
+    formStatus = {}
+    formStatus[1] = student.form1_completed
+    formStatus[2] = student.form2_completed
+
+    select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
+    SelectionStage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+    context = {
+        'formStatus': formStatus,
+        'select_before_camp': select_before_camp,
+        'SelectionStage': SelectionStage
+    }
+    if student is not None:
+        print('student:', student)
+    return render(request, 'std_index.html', {'student': student, 'context': context})
+    
 
 def pSel(request):
     if request.session.has_key('std_id'):
@@ -481,8 +508,9 @@ def pSel(request):
         team = request.session['team']
         student_instance = Student.objects.get(std_id=std_id)
         team_display = Student.TEAM_CHOICES[team-1][1]
-        current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
-        form_type = student_instance.j_or_h + str(current_form_stage) #returning J1, J2, H1, H2
+        # current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+        form_stage = request.GET.get('form_stage')
+        form_type = student_instance.j_or_h + str(form_stage) #returning J1, J2, H1, H2
         form_display = dict(Student.FORM_DISPLAY)[form_type] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
         
         student = {
@@ -493,7 +521,7 @@ def pSel(request):
         }
         request.session['team_display'] = team_display
         request.session['form_display'] = form_display
-        request.session['current_form_stage'] = current_form_stage
+        request.session['form_stage'] = form_stage
         request.session['form_type'] = form_type
         return render(request, 'pSel.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
     else:
@@ -504,7 +532,9 @@ def get_courses(request):
     std_id = request.session['std_id']
     student_instance = Student.objects.get(std_id=std_id)
     selection_range = AdminSetting.objects.get(setting_name=student_instance.j_or_h + '1stRange').configuration
-    if AdminSetting.objects.get(setting_name='SelectionStage').configuration == '1':
+    form_stage = request.session['form_stage']
+
+    if form_stage == '1':
         section_instances = Section.objects.filter(section_id__lte=selection_range)
         course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
         sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
@@ -631,25 +661,24 @@ def submit_form(request):
     del request.session['selections']
     return redirect('success')  # Redirect to a success page or another appropriate page
 
-def success(request):
+def success(request): # 選課成功
     std_id = request.session['std_id']
     student = Student.objects.get(std_id=std_id)
-    current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
+    form_stage = request.session['form_stage']
 
 
-    if current_form_stage == '1':
+    if form_stage == '1':
         student.form1_completed = True
         print('form1 completed')
-    elif current_form_stage == '2':
+    elif form_stage == '2':
         student.form2_completed = True
-        print('form1 completed')
+        print('form2 completed')
     # student.save() 測試先關掉
-    request.session.clear()
-    std_logout(request)
     return render(request, 'success.html')
 
 def stdLogout(request):
     std_logout(request)
+    request.session.clear()
     return redirect('/stdLogin')
 
 def logout(request):

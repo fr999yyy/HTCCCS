@@ -26,7 +26,7 @@
               {% csrf_token %}
               <span class="display-3">學員登入</span>
                 <div class="mb-3 pt-5 text-start lead">
-                  <label for="stdIdInput" class="form-label">學員編號</label>
+                  <label for="stdIdInput" class="form-label lead">學員編號</label>
                   <input
                   type="text"
                   class="form-control"
@@ -36,14 +36,22 @@
                   placeholder=""
                   />
                 </div>
-                <div class="mb-3 text-start lead">
+                <div class="mb-3 py-3 text-start lead">
+                  <label for="names" class="lead form-label">學員名稱</label>
+                  <input class="form-control" list="names" name="std_name" id="std_name">
+                  <datalist class="" id="names">
+                      {% for name in names %}
+                          <option value="{{ name }}">{{ name }}</option>
+                      {% endfor %}
+                  </datalist>
+              </div>
+                <!-- <div class="mb-3 text-start lead">
                 <label for="teamInput" class="form-label">小隊</label>
                 <select
                   class="form-select"
                   name="team"
                   id="teamInput"
                 >
-                <!-- 需要用js隨import的學員資訊來調整，預設n組 -->
                   <option selected value="">選擇你的小隊</option>
                   <option value="1">第一小隊</option>
                   <option value="2">第二小隊</option>
@@ -56,19 +64,19 @@
                 </select>
                 </div>
                 <div class="mb-3 text-start lead">
-                <label for="satbInput" class="form-label">聲部</label>
-                <select
-                  class="form-select"
-                  name="satb"
-                  id="satbInput"
-                >
-                <!-- 需要用js隨import的學員資訊來調整，預設n組 -->
-                  <option selected value="">選擇你的聲部</option>
-                  <option value="S">S</option>
-                  <option value="A">A</option>
-                  <option value="T">T</option>
-                  <option value="B">B</option>
-                </select>
+                  <label for="satbInput" class="form-label">聲部</label>
+                  <select
+                    class="form-select"
+                    name="satb"
+                    id="satbInput"
+                  >
+                    <option selected value="">選擇你的聲部</option>
+                    <option value="S">S</option>
+                    <option value="A">A</option>
+                    <option value="T">T</option>
+                    <option value="B">B</option>
+                  </select>
+                </div> -->
                 <div class="text-center my-3">
                   {% for message in messages %}
                   <div class="text-danger" id="stdError">{{message}}</div>

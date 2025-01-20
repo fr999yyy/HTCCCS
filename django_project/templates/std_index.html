@@ -1,0 +1,104 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>學員首頁</title>
+        <!-- Required meta tags -->
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, shrink-to-fit=no"
+        />
+        <link rel="stylesheet" href="{% static 'style.css' %}">  
+        <!-- Bootstrap CSS v5.2.1 -->
+        <link
+            href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+            rel="stylesheet"
+            integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+            crossorigin="anonymous"
+        />
+    </head>
+
+    <body>
+      <main>
+          <div class="d-flex justify-content-center align-self-center">
+            <div class="loginBox text-center bg-light">
+                <span class="display-3">選課表單</span>
+                <div class="d-none">
+                    <div id="formStatus">{{ context.formStatus | json_script:"formStatus" }}</div>
+                    <div id="select_before_camp">{{ context.select_before_camp }}</div>
+                    <div id="SelectionStage">{{ context.SelectionStage }}</div>
+                </div>
+                <div class="my-3">
+                    <a id="form1_link" href="{% url 'pSel' 1 %}" class="btn btn-link my-2 d-block">進入第一階段選課（第一節～第六節）</a>
+                    <a id="form2_link" href="{% url 'pSel' 2 %}" class="btn btn-link my-2 d-block">進入第二階段選課（第七節～第十二節）</a>
+                </div>
+                <a href="{% url 'stdLogout' %}" class="btn btn-lg btn-secondary m-3 p-2">登出</a>
+            </div>
+            </div> 
+
+        </main>
+    <script id="formStatus" type="application/json"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            
+            var selectBeforeCamp = document.getElementById("select_before_camp").textContent.trim();
+            const formStatus = JSON.parse(document.getElementById("formStatus").textContent);
+            const formStatus1 = formStatus[1];
+            const formStatus2 = formStatus[2];
+            
+            if (selectBeforeCamp === "TRUE") {
+
+                if (formStatus1 == true) {
+                        document.getElementById("form1_link").textContent = "第一階段選課已完成";
+                        document.getElementById("form1_link").classList.add("disabled");
+                        document.getElementById("form1_link").removeAttribute("href");
+                    }
+                else if (formStatus2 == true) {
+                    document.getElementById("form2_link").textContent = "第二階段選課已完成";
+                    document.getElementById("form2_link").classList.add("disabled");
+                }
+                // Perform your desired actions with formStatus1 and formStatus2 here
+                console.log(formStatus1);
+                console.log(formStatus2);
+            }
+            else {
+                var SelectionStage = document.getElementById("SelectionStage").textContent.trim();
+                if (SelectionStage == "1") {
+                    document.getElementById("form2_link").textContent = "第二階段選課未開放";
+                    document.getElementById("form2_link").classList.add("disabled");
+                    if (formStatus1 == true) {
+                        document.getElementById("form1_link").textContent = "第一階段選課已完成";
+                        document.getElementById("form1_link").classList.add("disabled");
+                    }
+                    
+                }
+                else if (SelectionStage == "2") {
+                    document.getElementById("form1_link").textContent = "第一階段選課未開放";
+                    document.getElementById("form1_link").classList.add("disabled");
+                    if (formStatus2 == true) {
+                    document.getElementById("form2_link").textContent = "第二階段選課已完成";
+                    document.getElementById("form2_link").classList.add("disabled");
+                }
+                }
+                // Perform your desired actions with SelectionStage here
+                console.log(SelectionStage);
+            }
+            
+        });
+    </script>
+      <!-- <script src="/js/stdLogin.js"></script> -->
+              <!-- Bootstrap JavaScript Libraries -->
+              <script
+              src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"
+              integrity="sha384-I7E8VVD/ismYTF4hNIPjVp/Zjvgyol6VFvRkX/vR+Vc4jQkC+hVqc2pM8ODewa9r"
+              crossorigin="anonymous"
+          ></script>
+  
+          <script
+              src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.min.js"
+              integrity="sha384-BBtl+eGJRgqQAUMxJ7pMwbEyER4l1g+O15P+16Ep7Q9Q+zqX6gSbd85u4mG4QzX+"
+              crossorigin="anonymous"
+          ></script>
+    </body>
+</html>
