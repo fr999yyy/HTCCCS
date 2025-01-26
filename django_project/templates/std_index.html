@@ -30,8 +30,8 @@
                     <div id="SelectionStage">{{ context.SelectionStage }}</div>
                 </div>
                 <div class="my-3">
-                    <a id="form1_link" href="{% url 'pSel' 1 %}" class="btn btn-link my-2 d-block">進入第一階段選課（第一節～第六節）</a>
-                    <a id="form2_link" href="{% url 'pSel' 2 %}" class="btn btn-link my-2 d-block">進入第二階段選課（第七節～第十二節）</a>
+                    <a id="form1_link" href="{% url 'select_form' 1 %}" class="btn btn-link my-2 d-block">進入第一階段選課（第一節～第六節）</a>
+                    <a id="form2_link" href="{% url 'select_form' 2 %}" class="btn btn-link my-2 d-block">進入第二階段選課（第七節～第十二節）</a>
                 </div>
                 <a href="{% url 'stdLogout' %}" class="btn btn-lg btn-secondary m-3 p-2">登出</a>
             </div>

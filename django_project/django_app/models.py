@@ -54,12 +54,12 @@ class Student(models.Model):
     def get_j_or_h(self):
         return self.dict(J_OR_H_CHOICES).get(j_or_h)
 
-class Volunteer(models.Model):
+class Volunteer(models.Model): # 志工
     volunteer_id = models.AutoField(primary_key=True)
     camp_name = models.CharField(max_length=15, blank=True, null=True)
     profile_pic = models.CharField(max_length=255, blank=True, null=True)
 
-class Section(models.Model):
+class Section(models.Model): # 節次
     # 原本用於節次顯示，用節次時段表中的section_disply取代
     # SECTION_CHOICES = [
     #     ('1', '第一節'),
@@ -86,7 +86,7 @@ class Section(models.Model):
     def __str__(self):
         return f"Section {self.section_id}: {self.section_time}"
 
-class Course(models.Model):
+class Course(models.Model): # 一般課程
     course_id = models.AutoField(primary_key=True)
     course_name = models.CharField(max_length=255)
     course_info = models.TextField(max_length=255, blank=True, null=True)
@@ -99,7 +99,7 @@ class Course(models.Model):
     def __str__(self):
         return self.course_name
 
-class SpecialCourse(models.Model):
+class SpecialCourse(models.Model): # 國中部、高中部課程
     course_id = models.AutoField(primary_key=True)
     course_name = models.CharField(max_length=255)
     course_info = models.TextField(max_length=255, blank=True, null=True)

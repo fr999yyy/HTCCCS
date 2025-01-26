@@ -23,90 +23,76 @@
     </head>
 
     <body>
+                {% include 'volunteer_nav.html' %}
 
-            {% for message in messages %}
-                {% if message.tags == 'error' %}
-                    <div class="alert alert-danger alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
-                    <strong></strong> {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% elif message.tags == 'success' %}
-                    <div class="alert alert-success alert-dismissible fade show position-absolute w-100" role="alert" style="z-index: 1050;">
-                    <strong></strong> {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endif %}
-            {% endfor %}
-
-                <main class="mt-3 pt-1">
+                <main class="mt-5 pt-1">
+                    
                     <div class="container">
+                        <h1 class="display-6">選課結果查詢</h1>
                         <ul class="nav nav-tabs" id="myTab" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1" type="button" role="tab" aria-controls="tab1" aria-selected="true">國中部</button>
+                                <button class="nav-link active" id="tab-TeamLookup-tab" data-bs-toggle="tab" data-bs-target="#tab-TeamLookup" type="button" role="tab" aria-controls="tab-TeamLookup" aria-selected="true">小隊</button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="tab2-tab" data-bs-toggle="tab" data-bs-target="#tab2" type="button" role="tab" aria-controls="tab2" aria-selected="false">高中部</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3" type="button" role="tab" aria-controls="tab3" aria-selected="false">課程</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#tab4" type="button" role="tab" aria-controls="tab4" aria-selected="false">總表</button>
+                                <button class="nav-link" id="tab-CourseResultLookup-tab" data-bs-toggle="tab" data-bs-target="#tab-CourseResultLookup" type="button" role="tab" aria-controls="tab-CourseResultLookup" aria-selected="false">課程</button>
                             </li>
                         </ul>
                         <div class="tab-content" id="myTabContent">
-                            <div class="tab-pane fade show active" id="tab1" role="tabpanel" aria-labelledby="tab1-tab">
-                                <form>
+                            <div class="tab-pane fade show active m-3" id="tab-TeamLookup" role="tabpanel" aria-labelledby="tab-TeamLookup-tab">
+                                <form id="TeamLookup-form">
+                                    {% csrf_token %}
                                     <div class="mb-3">
-                                        <label for="select1" class="form-label">Select Option</label>
-                                        <select class="form-select" id="select1" name="select1">
-                                            <option value="1">Option 1</option>
-                                            <option value="2">Option 2</option>
-                                            <option value="3">Option 3</option>
+                                        <label for="select1" class="form-label">國中／高中部</label>
+                                        <select class="form-select" id="JorH-select" name="j_or_h">
+                                            <option value="J">國中部</option>
+                                            <option value="H">高中部</option>
                                         </select>
                                     </div>
-                                    <button type="button" class="btn btn-primary">Submit</button>
-                                </form>
-                            </div>
-                            <div class="tab-pane fade" id="tab2" role="tabpanel" aria-labelledby="tab2-tab">
-                                <form>
                                     <div class="mb-3">
-                                        <label for="select2" class="form-label">Select Option</label>
-                                        <select class="form-select" id="select2" name="select2">
-                                            <option value="1">Option 1</option>
-                                            <option value="2">Option 2</option>
-                                            <option value="3">Option 3</option>
+                                        <label for="select1" class="form-label">小隊</label>
+                                        <select class="form-select" id="teamSelect" name="team">
+                                            <option value="1">第一小隊</option>
+                                            <option value="2">第二小隊</option>
+                                            <option value="3">第三小隊</option>
+                                            <option value="4">第四小隊</option>
+                                            <option value="5">第五小隊</option>
+                                            <option value="6">第六小隊</option>
+                                            <option value="7">第七小隊</option>
+                                            <option value="8">第八小隊</option>
                                         </select>
                                     </div>
-                                    <button type="button" class="btn btn-primary">Submit</button>
-                                </form>
-                            </div>
-                            <div class="tab-pane fade" id="tab3" role="tabpanel" aria-labelledby="tab3-tab">
-                                <form>
                                     <div class="mb-3">
-                                        <label for="select3" class="form-label">Select Option</label>
-                                        <select class="form-select" id="select3" name="select3">
-                                            <option value="1">Option 1</option>
-                                            <option value="2">Option 2</option>
-                                            <option value="3">Option 3</option>
-                                        </select>
+                                        <label for="SelectionStage" class="lead form-label">節次</label>
+                                        <div>
+                                            <select class="form-select" name="section_id" id="sections">
+                                                {% for section in sections %}
+                                                    <option value="{{ section.section_id }}">{{ section.section_display }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
                                     </div>
-                                    <button type="button" class="btn btn-primary">Submit</button>
+                                    <button id="TeamLookup-button" type="button" class="btn btn-primary">查詢</button>
                                 </form>
                             </div>
-                            <div class="tab-pane fade" id="tab4" role="tabpanel" aria-labelledby="tab4-tab">
-                                <form>
+                            <div class="tab-pane fade m-3" id="tab-CourseResultLookup" role="tabpanel" aria-labelledby="tab-CourseResultLookup-tab">
+                                <form id="CourseResultLookup-form">
+                                    {% csrf_token %}
                                     <div class="mb-3">
-                                        <label for="select4" class="form-label">Select Option</label>
-                                        <select class="form-select" id="select4" name="select4">
-                                            <option value="1">Option 1</option>
-                                            <option value="2">Option 2</option>
-                                            <option value="3">Option 3</option>
-                                        </select>
+                                        <label for="course_select" class="lead form-label">課程</label>
+                                        <input class="form-select" list="course_select" name="course_id">
+                                            <datalist class="" id="course_select">
+                                                {% for course in courses %}
+                                                    <option value="{{ course.course_id }}">{{ course.course_name }}</option>
+                                                {% endfor %}
+                                            </datalist>
                                     </div>
-                                    <button type="button" class="btn btn-primary">Submit</button>
+                                    <button id="CourseResultLookup-button" type="button" class="btn btn-primary">查詢</button>
+                                    <!-- Search results will be displayed here -->
                                 </form>
                             </div>
+                        </div>
+                        <div id="results-container" class="mt-3">
+                            <!-- 選課結果顯示 -->
                         </div>
                     </div>
                 </main>
@@ -114,42 +100,80 @@
             <!-- place footer here -->
         </footer>
         <script>
-
-            document.getElementById('add_change_result_row').addEventListener('click', function() {
-                // Clone the existing row
-                var container = document.getElementById('change_result_container');
-                var newRow = container.querySelector('.change_result_row').cloneNode(true);
-                
-                // Clear the input values in the cloned row
-                newRow.querySelector('input[name="std_name"]').value = '';
-                newRow.querySelector('select[name="course"]').selectedIndex = 0;
-                
-                // Append the cloned row to the container
-                container.appendChild(newRow);
-            });
-            document.getElementById('section').addEventListener('change', function() {
-            var sectionValue = this.value;
-            fetch(`/courses_lookup/?section_id=${sectionValue}`)
-                .then(response => response.json())
-                .then(data => {
-                    var courseSelect = document.querySelector('select[name="course"]');
-                    courseSelect.innerHTML = '';
-                    data.courses.forEach(course => {
-                        var option = document.createElement('option');
-                        option.value = course.course_id;
-                        option.textContent = course.course_name;
-                        courseSelect.appendChild(option);
-                    });
-                })
-                .catch(error => console.error('Error:', error));
-        }); 
             document.addEventListener('DOMContentLoaded', function() {
-                var sectionSelect = document.getElementById('section');
-                var sectionId = "{{ section_id }}";
-                if (sectionId) {
-                    sectionSelect.value = sectionId;
-                }
+                fetchCourses();
             });
+
+            function fetchCourses() {
+                fetch(`/courses_lookup/?section_id=`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const courseSelect = document.getElementById('course_select');
+                        courseSelect.innerHTML = '';
+                        data.courses.forEach(course => {
+                            const option = document.createElement('option');
+                            option.value = course.course_id;
+                            option.textContent = course.course_name;
+                            courseSelect.appendChild(option);
+                        });
+                    })
+                    .catch(error => console.error('Error:', error));
+            }
+
+            function handleTeamLookup() {
+                const form = document.getElementById('TeamLookup-form');
+                const formData = new FormData(form);
+                fetch('/team_results_lookup/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => displayResults(data.results))
+                    .catch(error => console.error('Error:', error));
+            }
+
+            function handleCourseLookup() {
+                const form = document.getElementById('CourseResultLookup-form');
+                const formData = new FormData(form);
+                fetch('/course_results_lookup/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => displayResults(data.results))
+                    .catch(error => console.error('Error:', error));
+            }
+
+            function displayResults(results) {
+                const resultsContainer = document.getElementById('results-container');
+                resultsContainer.innerHTML = '<h2>查詢結果</h2>';
+                const table = document.createElement('table');
+                table.classList.add('table');
+                const thead = document.createElement('thead');
+                thead.innerHTML = '<tr><th>學員</th><th>課程</th></tr>';
+                table.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                results.forEach(result => {
+                    const row = document.createElement('tr');
+                    if (result.std_tag === 'gr') {
+                        row.classList.add('table-danger');
+                        console.log('gr');
+                    }
+                    row.innerHTML = `<td>${result.std_name}</td><td>${result.course_name}</td>`;
+                    tbody.appendChild(row);
+                });
+                table.appendChild(tbody);
+                resultsContainer.appendChild(table);
+            }
+
+            document.getElementById('TeamLookup-button').addEventListener('click', handleTeamLookup);
+            document.getElementById('CourseResultLookup-button').addEventListener('click', handleCourseLookup);
         </script>
                 <!-- Bootstrap JavaScript Libraries -->
                 <script

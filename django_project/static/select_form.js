@@ -44,6 +44,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const div = document.createElement('div');
                     div.className = 'd-flex align-items-center';
                     const select = document.createElement('select');
+                    if (course.course_type === 'NA') {
+                        select.disabled = true;
+                        course.course_name = '（連堂）' + course.course_name;
+                    }
                     select.className = 'form-select form-select-sm text-center';
                     select.name = 'priority';
                     select.style.width = 'auto';

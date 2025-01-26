@@ -26,7 +26,7 @@ def index(request):
     # if not user.is_anonymous:
     #     print(user)
     #     if user.has_perm('django_app.is_student'):
-    #         return redirect('/pSel')
+    #         return redirect('/select_form')
     #     elif user.has_perm('django_app.is_volunteer'):
     #         return redirect('/volunteer_dashboard')
     #     elif user.has_perm('django_app.is_cs'):
@@ -40,7 +40,7 @@ def index(request):
 def is_admin(user):
     return user.is_superuser
 
-def stdLogin(request):
+def stdLogin(request): # 學生登入
     if request.method == 'POST':
         if not request.POST['std_id'] or not request.POST['std_name']:
             messages.error(request, '請填寫所有欄位')
@@ -52,15 +52,6 @@ def stdLogin(request):
         student = std_authenticate(std_id=std_id, std_name= std_name)
         student_instance = Student.objects.get(std_id=std_id)
         select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
-
-
-        # if student_instance.form1_completed & (current_form_stage == 1):
-        #     messages.error(request, '你已經選過課囉！')
-        #     return redirect('/stdLogin')
-        # if student_instance.form2_completed & (current_form_stage == 2):
-        #     messages.error(request, '你已經選過課囉！')
-        #     return redirect('/stdLogin')
-
 
         if student is not None:
             std_login(request, student)
@@ -81,6 +72,8 @@ def csLogin(request): # 選課組登入
         password = request.POST['password']
 
         user = auth.authenticate(username='admin', password=password)
+        if user is None:
+            user = auth.authenticate(username='course_selection', password=password)
 
         if user is not None:
             auth.login(request, user)
@@ -91,11 +84,11 @@ def csLogin(request): # 選課組登入
     else:
         return render(request, 'csLogin.html')
 
-def vLogin(request):
+def Volunteer_Login(request): # 志工登入
     if request.method == 'POST':
         if not request.POST['password']:
             messages.error(request, '請輸入密碼')
-            return redirect('/vLogin')
+            return redirect('/Volunteer_Login')
         password = request.POST['password']
 
         user = auth.authenticate(username='volunteer', password=password)
@@ -107,56 +100,91 @@ def vLogin(request):
         else:
             messages.error(request, '密碼錯誤，請重新輸入')
             print('pwd wrong')
-            return redirect('/vLogin')
+            return redirect('/Volunteer_Login')
     else:
         print('login failed')
-        return render(request, 'vLogin.html')
+        return render(request, 'Volunteer_Login.html')
 
-def volunteer_dashboard(request):
-    return render(request, 'volunteer_dashboard.html')
+def volunteer_dashboard(request): # 志工主頁
+    return render(request, 'volunteer_dashboard.html', {'sections': Section.objects.all()})
 
-def dashboard(request):
+def dashboard(request): # 選課組主頁
     if request.user.is_authenticated:
-        db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
-        return render(request, 'dashboard.html', {'db_name': db_name})
+        return render(request, 'dashboard.html')
     else:
         print('not authenticated')
         return redirect('/csLogin')
 
-def selection_lookup(request):
-    if request.method == 'POST':
-        std_name = request.POST['std_name']
-        section_id = request.POST['section_id']
-        student = Student.objects.get(std_name = std_name)
-        section = Section.objects.get(section_id=section_id)
-        courses_in_section = list(Course.objects.filter(section_id=section.section_id))
-        special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section.section_id))
-        all_courses_in_section = courses_in_section + special_courses_in_section
-        selections = Selection.objects.filter(std=student, section=section)
+def courses_lookup(request): # 從資料庫抓課程回傳到前端
+    section_id = request.GET.get('section_id') if request.GET.get('section_id') else 'all'
+    if section_id == 'all':
+        return JsonResponse({'courses': list(Course.objects.all().values('course_id', 'course_name')) + list(SpecialCourse.objects.all().values('course_id', 'course_name'))})
+    courses_in_section = list(Course.objects.filter(section_id=section_id).values('course_id', 'course_name'))
+    special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section_id).values('course_id', 'course_name'))
+    all_courses_in_section = courses_in_section + special_courses_in_section
 
-        # Extract course names from the selections
+    return JsonResponse({'courses': all_courses_in_section})
+
+def selection_lookup(request): # 選課組後台-查詢選課結果
+    if request.method == 'POST':
+        input_course_id = request.POST['input_course_id']
+        output_course_id = request.POST['output_course_id']
+
+        students = SelectionResult.objects.filter(object_id=input_course_id).select_related('std')
+        selections = Selection.objects.filter(course_id=output_course_id, std__in=[student.std_id for student in students]).order_by('priority')
+        
         selection_details = []
         for selection in selections:
-            course_name = None
-            if Course.objects.filter(course_id=selection.course_id).exists():
-                course_name = Course.objects.get(course_id=selection.course_id).course_name
-            elif SpecialCourse.objects.filter(course_id=selection.course_id).exists():
-                course_name = SpecialCourse.objects.get(course_id=selection.course_id).course_name
+            student_name = Student.objects.get(std_id=selection.std_id).std_name
             selection_details.append({
                 'priority': selection.priority,
-                'course_name': course_name
+                'student_name': student_name
             })
 
-        return render(request, 'selection_lookup.html', {
-            'selection_details': selection_details,
-            'section': section.section_display,
-            'student': student.std_name
-        })
-        
-    names = Student.objects.values_list('std_name', flat=True)
-    return render(request, 'selection_lookup.html', {'names': list(names)})
+        return JsonResponse({'selections': selection_details})
 
-def upload_result_change(request):
+    return render(request, 'selection_lookup.html', {'sections': Section.objects.all()})
+
+def team_results_lookup(request): # 小組選課結果查詢
+    if request.method == 'POST':
+        j_or_h = request.POST.get('j_or_h')
+        team = request.POST.get('team')
+        section_id = request.POST.get('section_id')
+
+        students = Student.objects.filter(j_or_h=j_or_h, team=team)
+
+        results = []
+        for student in students:
+            result = SelectionResult.objects.filter(std=student, section_id=section_id).first()
+            if result:
+                results.append({
+                    'std_name': student.std_name,
+                    'course_name': result.course.course_name
+                })
+
+        return JsonResponse({'results': results})
+
+    return render(request, 'volunteer_dashboard.html', {'sections': Section.objects.all()})
+
+def course_results_lookup(request): # 課程選課結果查詢
+    if request.method == 'POST':
+        course_id = request.POST.get('course_id')
+        # Get SelectionResult with the corresponding course_id
+        results = []
+        selection_results = SelectionResult.objects.filter(object_id=course_id)
+        for result in selection_results:
+            results.append({
+                    'std_name': result.std.std_name,
+                    'course_name': result.course.course_name,
+                    'std_tag': result.std.std_tag
+                })
+            print(result.std.std_tag)
+
+        return JsonResponse({'results': results})
+
+    return render(request, 'volunteer_dashboard.html', {'sections': Section.objects.all(), 'courses': Course.objects.all()})
+
+def upload_result_change(request): # 選課組後台-志願結果更改
         if request.method == 'POST' and request.FILES.get('result_change_file'):
             result_change_file = request.FILES['result_change_file']
             wb = openpyxl.load_workbook(result_change_file)
@@ -215,40 +243,15 @@ def upload_result_change(request):
         return render(request, 'upload_result_change.html')
 
 
-def change_results(request):
-    section_id = request.GET.get('section_id')
-    if section_id is None:
-        section_id = 1
-    courses_in_section = list(Course.objects.filter(section_id=section_id).values('course_id', 'course_name'))
-    special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section_id).values('course_id', 'course_name'))
-    all_courses_in_section = courses_in_section + special_courses_in_section
-        
-    return render(request, 'change_results.html', {
-        'names': list(Student.objects.values_list('std_name', flat=True)),
-        'section_id': section_id,
-        'courses': all_courses_in_section
-    })
-
-def courses_lookup(request):
-    section_id = request.GET.get('section_id')
-    courses_in_section = list(Course.objects.filter(section_id=section_id).values('course_id', 'course_name'))
-    special_courses_in_section = list(SpecialCourse.objects.filter(section_id=section_id).values('course_id', 'course_name'))
-    all_courses_in_section = courses_in_section + special_courses_in_section
-
-    return JsonResponse({'courses': all_courses_in_section})
-
-def result(request):
-    db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
-    return render(request, 'result.html', {'db_name': db_name})
+def result(request): # 選課組後台-志願結果頁面
+    return render(request, 'result.html')
 
 def updateData(request):
-    db_name = connection.settings_dict['NAME'] # 顯示年份＝資料庫名稱
     J1stRange = AdminSetting.objects.get(setting_name='J1stRange').configuration
     H1stRange = AdminSetting.objects.get(setting_name='H1stRange').configuration
     SelectionStage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
     select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
     return render(request, 'updateData.html', {
-        'db_name': db_name, 
         'J1stRange': J1stRange, 
         'H1stRange': H1stRange, 
         'SelectionStage': SelectionStage,
@@ -280,7 +283,7 @@ def update_settings(request):
         return redirect('updateData')
     return redirect('updateData')
 
-def upload_zip(request):
+def upload_zip(request): # 匯入資料壓縮檔（基本資料、志工大頭貼）
     valid_files = {'db_import.xlsx', 'pfp'}
     if request.method == 'POST' and request.FILES.get('uploadZip'):
         zip_file = request.FILES['uploadZip']
@@ -418,7 +421,7 @@ def generate_xlsx(request): # 下載點名總表
 
         col_num = 3
         for course in courses:
-            # Add course name, classroom, and TA
+            # 新增、課程、教室、助教
             ws.merge_cells(start_row=3, start_column=col_num, end_row=3, end_column=col_num+4)
             ws.merge_cells(start_row=4, start_column=col_num, end_row=4, end_column=col_num+4)
             ws.merge_cells(start_row=5, start_column=col_num, end_row=5, end_column=col_num+4)
@@ -483,7 +486,7 @@ def generate_xlsx(request): # 下載點名總表
 
     return response
 
-def std_index(request):
+def std_index(request): # 學生主頁（表單導覽頁）
     student = get_student(request.session.get('std_id'))
 
     formStatus = {}
@@ -502,14 +505,13 @@ def std_index(request):
     return render(request, 'std_index.html', {'student': student, 'context': context})
     
 
-def pSel(request):
+def select_form(request, form_stage): # 選課表單頁面
     if request.session.has_key('std_id'):
         std_id = request.session['std_id']
         team = request.session['team']
         student_instance = Student.objects.get(std_id=std_id)
         team_display = Student.TEAM_CHOICES[team-1][1]
         # current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
-        form_stage = request.GET.get('form_stage')
         form_type = student_instance.j_or_h + str(form_stage) #returning J1, J2, H1, H2
         form_display = dict(Student.FORM_DISPLAY)[form_type] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
         
@@ -523,12 +525,11 @@ def pSel(request):
         request.session['form_display'] = form_display
         request.session['form_stage'] = form_stage
         request.session['form_type'] = form_type
-        return render(request, 'pSel.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
+        return render(request, 'select_form.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
     else:
         return redirect('/stdLogin')
-    pass
 
-def get_courses(request):
+def get_courses(request): # 從資料庫抓課程回傳到前端
     std_id = request.session['std_id']
     student_instance = Student.objects.get(std_id=std_id)
     selection_range = AdminSetting.objects.get(setting_name=student_instance.j_or_h + '1stRange').configuration
@@ -536,13 +537,20 @@ def get_courses(request):
 
     if form_stage == '1':
         section_instances = Section.objects.filter(section_id__lte=selection_range)
-        course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
+        course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M', 'NA'])
         sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
     else:
         section_instances = Section.objects.filter(section_id__gt=selection_range)
-        course_instances = Course.objects.filter(section_id__gt=selection_range, course_type__in=[student_instance.j_or_h, 'M'])
+        course_instances = Course.objects.filter(section_id__gt=selection_range, course_type__in=[student_instance.j_or_h, 'M', 'NA'])
         sp_course_instances = SpecialCourse.objects.filter(section_id__gt=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
 
+    # 課程類別 course_type:
+    # 'J' 國中限定
+    # 'H' 高中限定
+    # 'M' 國高中混合
+    # 'JS' 國中部課程
+    # 'HS' 高中部課程
+    # 'NA' 連堂第二節
     
     sections_with_courses = [] # list中插入dict用來分開儲存每一個節次對應的所有課程，以及課程數量，用來顯示志願選項數量
     for section in section_instances:
@@ -561,6 +569,7 @@ def get_courses(request):
                     'course_id': course.course_id,
                     'course_name': course.course_name,
                     'course_info': course.course_info,
+                    'course_type': course.course_type,
                     'teachers': teachers
                 })
         else:
@@ -576,6 +585,7 @@ def get_courses(request):
                     'course_id': course.course_id,
                     'course_name': course.course_name,
                     'course_info': course.course_info,
+                    'course_type': course.course_type,
                     'teachers': teachers
                 })
         num_courses = len(courses_in_section)
@@ -598,9 +608,9 @@ def double_check(request): # merge with confirm
         # print('selections:', selections)
         return redirect('confirm')
 
-    return redirect('pSel')
+    return redirect('select_form')
 
-def confirm(request):
+def confirm(request): # 確認結果頁面
     team_display = request.session['team_display']
     form_display = request.session['form_display']
     selections = request.session.get('selections', [])
@@ -635,7 +645,7 @@ def confirm(request):
         'form_display': form_display,
     })
 
-def submit_form(request):
+def submit_form(request): # 提交志願表單
     selections = request.session.get('selections', [])
     std_id = request.session['std_id']  # Assuming std_id is used as the username
     form_type = request.session['form_type']
@@ -769,13 +779,13 @@ def process_excel_form(request): # 處理志願表單
 
     return render(request, 'updateData.html')
 
-def truncate_table(model):
+def truncate_table(model): # 清空資料表
     with connection.cursor() as cursor:
         table_name = model._meta.db_table
         cursor.execute(f'TRUNCATE TABLE `{table_name}`')
 
 @user_passes_test(is_admin)
-def truncate_data(request):
+def truncate_data(request): # 選課組後台-清空選課資料 / 志願結果表格
     if request.method == 'POST':
         model_name = request.POST.get('model')
         if model_name == 'Selection':
@@ -792,7 +802,8 @@ def truncate_data(request):
 def process_selection_results(request): # 處理志願結果
     if request.method == 'POST':
         processing_stage = request.POST['processing_stage']
-        if processing_stage == '1': 
+        # 從按鈕判斷處理第一階或第二階選課
+        if processing_stage == '1':
             sections = Section.objects.filter(section_id__lte=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 1~6
         elif processing_stage == '2': 
             sections = Section.objects.filter(section_id__gt=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 7~12
@@ -808,6 +819,18 @@ def process_selection_results(request): # 處理志願結果
             # 優先排序連堂的第二堂課
             all_courses_in_section.sort(key=lambda x: (x.course_type != 'NA', x.course_type != 'H', x.course_id))
 
+            # 光仁學生先全部指定到手語課
+            SL_courses = [c for c in all_courses_in_section if '手語課' in c.course_name]
+            for course in SL_courses: 
+                for gr_student in Student.objects.filter(std_tag='gr'):
+                    SelectionResult.objects.create(
+                        std=gr_student,
+                        content_type=ContentType.objects.get_for_model(course),
+                        object_id=course.course_id,
+                        section=section,
+                        form_type='NA'
+                    )
+                    assigned_students.add(gr_student.std_id)
 
             for course in all_courses_in_section:
                 if course.course_type == 'NA':
@@ -829,6 +852,9 @@ def process_selection_results(request): # 處理志願結果
                             assigned_students.add(selection.std.std_id)
             # Process other courses based on priorities
 
+            
+
+            # 處理完連堂後處理高中限定課程
             for priority in range(1, 6): 
                 # Check if the number of unassigned students is less than or equal to the total student limit of the course
                 all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
@@ -836,7 +862,6 @@ def process_selection_results(request): # 處理志願結果
                 for course in [c for c in all_courses_in_section if c.course_type == 'H']:
                     if course.course_id not in vacancy:
                         vacancy[course.course_id] = course.std_limit
-
                     selections = Selection.objects.filter(
                         section=section,
                         course_id=course.course_id,
@@ -876,6 +901,10 @@ def process_selection_results(request): # 處理志願結果
 
                     if course.course_id not in vacancy:
                         vacancy[course.course_id] = course.std_limit
+                    
+                    # 第二節手語課除非選第一或第二志願，不然不會被排進去
+                    if '手語課' in course.course_name and '二' in course.course_name and priority in [3, 4, 5, 6]:
+                        continue
 
                     if course.course_type == 'NA' or vacancy[course.course_id] == 0:
                         continue
@@ -911,6 +940,8 @@ def process_selection_results(request): # 處理志願結果
                             )
                             assigned_students.add(selection.std.std_id)
                         vacancy[course.course_id] = 0
+
+
             # Debugging: Check for unassigned students
             all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
             unassigned_students = all_students - assigned_students
@@ -921,23 +952,7 @@ def process_selection_results(request): # 處理志願結果
         return redirect('result')
     return redirect('result')  
 
-# from django_app.models import Selection, SelectionResult
-
-# # Iterate over all SelectionResult objects
-# for selection_result in SelectionResult.objects.all():
-#     student = selection_result.std
-#     course_id = selection_result.object_id
-#     section = selection_result.section
-
-#     # Find the corresponding Selection object for the student and course
-#     try:
-#         selection = Selection.objects.get(std=student, course_id=course_id, section=section)
-#         if selection.priority >= 3:
-#             print(f"Student ID: {student.std_id}, Priority: {selection.priority}, Course ID: {course_id}")
-#     except Selection.DoesNotExist:
-#         print(f"No selection found for Student ID: {student.std_id}, Course ID: {course_id}")
-
-def print_results_table(request):
+def print_results_table(request): # 選課組後台-列印志願結果
     # Gather data
     if request.method == 'POST':
         stage = request.POST['stage']
@@ -964,7 +979,6 @@ def print_results_table(request):
                 result = selection_results.filter(std=student, section=section).first()
                 if result:
                     Junior_data[team]['results'][section.section_id][student.std_id] = result.course.course_name
-                    print(Junior_data[team]['results'][section.section_id][student.std_id])
                 else:
                     print('No result found for student', student.std_id, 'in section', section.section_id)
                     Junior_data[team]['results'][section.section_id][student.std_id] = ''
@@ -980,7 +994,6 @@ def print_results_table(request):
                 result = selection_results.filter(std=student, section=section).first()
                 if result:
                     High_data[team]['results'][section.section_id][student.std_id] = result.course.course_name
-                    print(High_data[team]['results'][section.section_id][student.std_id])
                 else:
                     print('No result found for student', student.std_id, 'in section', section.section_id)
                     High_data[team]['results'][section.section_id][student.std_id] = ''
@@ -990,14 +1003,6 @@ def print_results_table(request):
             'Junior_data': Junior_data,
             'High_data': High_data,
         })
-
-# from django_app.models import SelectionResult, Selection, Course
-# test_course_id = 1
-# course = Course.objects.get(course_id=test_course_id)
-# print('人數限制：', course.std_limit)
-# count = SelectionResult.objects.filter(course.course_id=test_course_id).count()
-# print('分配到的人：', count)
-# print(course.std_limit >= count)
 
 
 
