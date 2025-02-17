@@ -8,12 +8,14 @@ import random
 from django.core.files.storage import FileSystemStorage
 from django.db import connection
 from .models import Student, Section, Volunteer, Course, AdminSetting, Selection, SpecialCourse, SelectionResult, CustomUser
+from django.contrib.contenttypes.models import ContentType
 import pandas as pd
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.decorators import user_passes_test
 import openpyxl
 from openpyxl.styles import Alignment, PatternFill, Font, Border, Side
 from openpyxl.utils import get_column_letter
+from django.db import transaction
 
 
 
@@ -525,6 +527,7 @@ def select_form(request, form_stage): # 選課表單頁面
         request.session['form_display'] = form_display
         request.session['form_stage'] = form_stage
         request.session['form_type'] = form_type
+        print('form_stage:', form_stage)
         return render(request, 'select_form.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
     else:
         return redirect('/stdLogin')
@@ -534,8 +537,8 @@ def get_courses(request): # 從資料庫抓課程回傳到前端
     student_instance = Student.objects.get(std_id=std_id)
     selection_range = AdminSetting.objects.get(setting_name=student_instance.j_or_h + '1stRange').configuration
     form_stage = request.session['form_stage']
-
-    if form_stage == '1':
+    print('form_stage in get_courses', form_stage)
+    if form_stage == 1:
         section_instances = Section.objects.filter(section_id__lte=selection_range)
         course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M', 'NA'])
         sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
@@ -799,6 +802,8 @@ def truncate_data(request): # 選課組後台-清空選課資料 / 志願結果�
 
     return redirect('updateData')
 
+
+
 def process_selection_results(request): # 處理志願結果
     if request.method == 'POST':
         processing_stage = request.POST['processing_stage']
@@ -809,7 +814,9 @@ def process_selection_results(request): # 處理志願結果
             sections = Section.objects.filter(section_id__gt=AdminSetting.objects.get(setting_name='J1stRange').configuration) # 7~12
 
         for section in sections:
+            print(f"Processing section {section.section_id}")
             assigned_students = set()  # 追蹤已經被分配的學生
+            unassigned_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))            
             vacancy = {}  # 追蹤每個課程的缺額
 
             courses_in_section = list(Course.objects.filter(section_id=section.section_id))
@@ -821,44 +828,46 @@ def process_selection_results(request): # 處理志願結果
 
             # 光仁學生先全部指定到手語課
             SL_courses = [c for c in all_courses_in_section if '手語課' in c.course_name]
+            sl_selections = []
             for course in SL_courses: 
                 for gr_student in Student.objects.filter(std_tag='gr'):
-                    SelectionResult.objects.create(
+                    if gr_student.std_id in assigned_students:
+                        print(f"Student {gr_student.std_id} already assigned, skipping.")
+                        continue
+                    sl_selections.append(SelectionResult(
                         std=gr_student,
                         content_type=ContentType.objects.get_for_model(course),
                         object_id=course.course_id,
                         section=section,
                         form_type='NA'
-                    )
+                    ))
                     assigned_students.add(gr_student.std_id)
+                    unassigned_students.remove(gr_student.std_id)
+            SelectionResult.objects.bulk_create(sl_selections)
 
+            # 優先處理連堂的第二堂課
+            na_selections = []
             for course in all_courses_in_section:
                 if course.course_type == 'NA':
-                    # 連堂的第二堂課id = 第一堂課id + 1
-                    # 優先處理連堂的第二堂課
                     previous_course_id = course.course_id - 1
                     previous_course = Course.objects.get(course_id=previous_course_id)
                     previous_selections = previous_course.selection_results.all()
 
                     for selection in previous_selections:
-                        if selection.std.std_id not in assigned_students:
-                            SelectionResult.objects.create(
+                        if selection.std.std_id in unassigned_students:
+                            na_selections.append(SelectionResult(
                                 std=selection.std,
                                 content_type=ContentType.objects.get_for_model(course),
                                 object_id=course.course_id,
                                 section=section,
                                 form_type=selection.form_type
-                            )
+                            ))
                             assigned_students.add(selection.std.std_id)
-            # Process other courses based on priorities
-
-            
+                            unassigned_students.remove(selection.std.std_id)
+            SelectionResult.objects.bulk_create(na_selections)
 
             # 處理完連堂後處理高中限定課程
             for priority in range(1, 6): 
-                # Check if the number of unassigned students is less than or equal to the total student limit of the course
-                all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
-                unassigned_students = all_students - assigned_students
                 for course in [c for c in all_courses_in_section if c.course_type == 'H']:
                     if course.course_id not in vacancy:
                         vacancy[course.course_id] = course.std_limit
@@ -868,79 +877,76 @@ def process_selection_results(request): # 處理志願結果
                         priority=priority
                     )
 
-                    available_selections = [s for s in selections if s.std.std_id not in assigned_students]
+                    available_selections = [s for s in selections if s.std.std_id in unassigned_students]
 
                     if len(available_selections) <= vacancy[course.course_id]:
+                        h_selections = []
                         for selection in available_selections:
-                            SelectionResult.objects.create(
+                            if selection.std.std_id in assigned_students:
+                                print(f"Student {selection.std.std_id} already assigned, skipping.")
+                                continue
+                            h_selections.append(SelectionResult(
                                 std=selection.std,
                                 content_type=ContentType.objects.get_for_model(course),
                                 object_id=course.course_id,
                                 section=section,
                                 form_type=selection.form_type
-                            )
+                            ))
                             assigned_students.add(selection.std.std_id)
+                            unassigned_students.remove(selection.std.std_id)
                             vacancy[course.course_id] -= 1
+                        SelectionResult.objects.bulk_create(h_selections)
                     else:
                         selected_students = random.sample(available_selections, vacancy[course.course_id])
+                        h_selections = []
                         for selection in selected_students:
-                            SelectionResult.objects.create(
+                            if selection.std.std_id in assigned_students:
+                                print(f"Student {selection.std.std_id} already assigned, skipping.")
+                                continue
+                            h_selections.append(SelectionResult(
                                 std=selection.std,
                                 content_type=ContentType.objects.get_for_model(course),
                                 object_id=course.course_id,
                                 section=section,
                                 form_type=selection.form_type
-                            )
+                            ))
                             assigned_students.add(selection.std.std_id)
+                            unassigned_students.remove(selection.std.std_id)
+                        SelectionResult.objects.bulk_create(h_selections)
                         vacancy[course.course_id] = 0
                 
-                
-            for priority in range(1, 6): 
-
-                for course in all_courses_in_section:
-
-                    if course.course_id not in vacancy:
-                        vacancy[course.course_id] = course.std_limit
-                    
-                    # 第二節手語課除非選第一或第二志願，不然不會被排進去
-                    if '手語課' in course.course_name and '二' in course.course_name and priority in [3, 4, 5, 6]:
-                        continue
-
-                    if course.course_type == 'NA' or vacancy[course.course_id] == 0:
-                        continue
-
-                    selections = Selection.objects.filter(
-                        section=section,
-                        course_id=course.course_id,
-                        priority=priority
-                    )
-
-                    available_selections = [s for s in selections if s.std.std_id not in assigned_students]
-
-                    if len(available_selections) <= vacancy[course.course_id]:
-                        for selection in available_selections:
+            while unassigned_students:
+                student = random.choice(list(unassigned_students))
+                if not Selection.objects.filter(section=section, std_id=student).exists():
+                    unassigned_students.remove(student)
+                    continue
+                for priority in range(1, 6): 
+                    selection = Selection.objects.filter(std=student, priority=priority, section=section).first()
+                    if selection:
+                        course_id = selection.course_id
+                        try:
+                            course = Course.objects.get(course_id=course_id)
+                        except Course.DoesNotExist:
+                            course = SpecialCourse.objects.get(course_id=course_id)
+                        if '手語課' in course.course_name and '二' in course.course_name and priority in [3, 4, 5, 6]:
+                            continue
+                        if course_id not in vacancy:
+                            vacancy[course_id] = course.std_limit
+                        if vacancy[course_id] > 0:
+                            if student in assigned_students:
+                                print(f"Student {student} already assigned, skipping.")
+                                continue
                             SelectionResult.objects.create(
                                 std=selection.std,
                                 content_type=ContentType.objects.get_for_model(course),
-                                object_id=course.course_id,
+                                object_id=course_id,
                                 section=section,
                                 form_type=selection.form_type
                             )
-                            assigned_students.add(selection.std.std_id)
-                            vacancy[course.course_id] -= 1
-                    else:
-                        selected_students = random.sample(available_selections, vacancy[course.course_id])
-                        for selection in selected_students:
-                            SelectionResult.objects.create(
-                                std=selection.std,
-                                content_type=ContentType.objects.get_for_model(course),
-                                object_id=course.course_id,
-                                section=section,
-                                form_type=selection.form_type
-                            )
-                            assigned_students.add(selection.std.std_id)
-                        vacancy[course.course_id] = 0
-
+                            assigned_students.add(student)
+                            vacancy[course_id] -= 1
+                            unassigned_students.remove(student)
+                            break
 
             # Debugging: Check for unassigned students
             all_students = set(Selection.objects.filter(section=section).values_list('std_id', flat=True))
@@ -950,7 +956,7 @@ def process_selection_results(request): # 處理志願結果
             
         messages.success(request, '選課結果已處理完成')
         return redirect('result')
-    return redirect('result')  
+    return redirect('result')
 
 def print_results_table(request): # 選課組後台-列印志願結果
     # Gather data
