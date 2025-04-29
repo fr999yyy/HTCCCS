@@ -7,6 +7,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const sectionsWithCourses = data.sections_with_courses;
             const sectionTab = document.getElementById('sectionTab');
             const sectionTabContent = document.getElementById('section-tabContent');
+            const savedSelections = data.saved_selections;
+            const test = data.test; //測試功能
+            console.log('test:', test); //測試功能
 
             sectionsWithCourses.forEach((section, index) => {
                 // Create tab button
@@ -19,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 button.type = 'button';
                 button.role = 'tab';
                 button.textContent = section.section_display;
-                console.log(section.section_display);
+                // console.log(section.section_display);
                 sectionTab.appendChild(button);
 
                 // Create tab pane
@@ -45,37 +48,56 @@ document.addEventListener('DOMContentLoaded', function() {
                     div.className = 'd-flex align-items-center';
                     const select = document.createElement('select');
                     if (course.course_type === 'NA') {
-                        select.disabled = true;
                         course.course_name = '（連堂）' + course.course_name;
                     }
-                    select.className = 'form-select form-select-sm text-center';
-                    select.name = 'priority';
-                    select.style.width = 'auto';
-                    const option = document.createElement('option');
-                    option.selected = false; //測試功能
-                    option.textContent = '選擇志願';
-                    select.appendChild(option);
+                    else if (course.course_type !== 'NA') {
+                        select.className = 'form-select form-select-sm text-center';
+                        select.name = 'priority';
+                        select.style.width = 'auto';
+                        const option = document.createElement('option');
+                        option.selected = false; //測試功能
+                        option.textContent = '選擇志願';
 
-                    const testOption = document.createElement('option'); //測試功能
-                    testOption.selected = true; //測試功能
-                    testOption.textContent = '測試'; //測試功能   
-                    testOption.value = n+`-${course.course_id}-${stdId}-${section.section_id}`; //測試功能
-                    console.log(testOption.value); //測試功能
-                    select.appendChild(testOption); //測試功能
-                    n++; //測試功能
+                        select.appendChild(option);
+                        const testOption = document.createElement('option'); //測試功能
+                        
+                        console.log('test:', test); //測試功能
+                        if (test === 0) {
+                            testOption.selected = true; //測試功能
+                        }
+
+
+                        testOption.textContent = '測試'; //測試功能   
+                        testOption.value = n+`-${course.course_id}-${stdId}-${section.section_id}`; //測試功能
+                        // console.log(testOption.value); //測試功能
+                        if (select){
+                            select.appendChild(testOption); //測試功能
+                        }
+                        
+                        n++; //測試功能
+                        
+                        for (let i = 1; i <= section.num_courses; i++) {
+                            const option = document.createElement('option');
+                            option.value = i + `-${course.course_id}-${stdId}-${section.section_id}`;
+                            option.textContent = i;
+
+                            if (savedSelections.includes(option.value)) {
+                                option.selected = true;
+                            }
+
+                            select.appendChild(option);
+                        }
+
+                        div.appendChild(select);
+                    }
                     
 
-                    for (let i = 1; i <= section.num_courses; i++) {
-                        const option = document.createElement('option');
-                        option.value = i + `-${course.course_id}-${stdId}-${section.section_id}`;
-                        option.textContent = i;
-                        select.appendChild(option);
-                    }
-                    div.appendChild(select);
+                    
 
                     const courseName = document.createElement('div');
-                    courseName.className = 'lead fw-bold mx-2';
-                    courseName.textContent = course.course_name;
+                    const noCourseInfo = "相飛世？耳年童邊急六寺鳥綠燈向父貝食澡收！科足游彩王找頭孝請肖收田士西喝根見氣，星定朱具都公外反鼻時刃婆兔她着今八頭借哪；鳥員西爪得要意點師停故嗎昔花。巾至您采告門高貝完來爪書，巴爪哭青幸植吃對乾千。";
+                    courseName.className = 'lead fw-bold mx-2 text-wrap';
+                    courseName.style.fontSize = 'clamp(1rem, 2.5vw, 1.25rem)'; courseName.textContent = course.course_name;
                     div.appendChild(courseName);
 
                     const button = document.createElement('button');
@@ -85,7 +107,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     button.setAttribute('data-bs-target', `#collapse${course.course_id}`);
                     button.setAttribute('aria-expanded', 'false');
                     button.setAttribute('aria-controls', `collapse${course.course_id}`);
-                    button.textContent = '詳細資訊';
+                    button.innerHTML = '<span class="d-none d-md-inline">詳細資訊</span><i class="d-md-none bi bi-chevron-down"></i>';
+                    button.addEventListener('click', function() {
+                        const icon = button.querySelector('i');
+                        if (icon.classList.contains('bi-chevron-down')) {
+                            icon.classList.remove('bi-chevron-down');
+                            icon.classList.add('bi-chevron-up');
+                        } else {
+                            icon.classList.remove('bi-chevron-up');
+                            icon.classList.add('bi-chevron-down');
+                        }
+                    });
                     div.appendChild(button);
 
                     listItem.appendChild(div);
@@ -99,7 +131,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     const courseInfo = document.createElement('div');
                     courseInfo.className = 'info';
-                    courseInfo.textContent = course.course_info ?? '沒有提供課程資訊';
+                    courseInfo.textContent = course.course_info ?? noCourseInfo;
                     cardBody.appendChild(courseInfo);
 
                     const teacherImages = document.createElement('div');
@@ -134,10 +166,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
             for (const select of selects) {
                 const value = select.value;
-                console.log(value);
+                // console.log(value);
                 if (!value || value === '選擇志願') {
                     errorMessage.textContent = '請確認所有課程都有填寫志願！';
-                    console.log('請確認所有課程都有填寫志願！');
+                    // console.log('請確認所有課程都有填寫志願！');
                     event.preventDefault();
                     return;
                 }
@@ -147,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (priorities[section_id][priority]) {
                     errorMessage.textContent = '同一節內志願序不得重複！（第'+section_id+'節）';
-                    console.log('志願序不得重複！');
+                    // console.log('志願序不得重複！');
                     event.preventDefault();
                     return;
                 }

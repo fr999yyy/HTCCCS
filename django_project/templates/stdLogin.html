@@ -38,13 +38,14 @@
                 </div>
                 <div class="mb-3 py-3 text-start lead">
                   <label for="names" class="lead form-label">學員名稱</label>
-                  <input class="form-control" list="names" name="std_name" id="std_name">
-                  <datalist class="" id="names">
-                      {% for name in names %}
-                          <option value="{{ name }}">{{ name }}</option>
-                      {% endfor %}
+                  <input class="form-control" list="names" name="std_name" id="std_name" oninput="filterDatalist()">
+                  <datalist id="names">
+                    {% for name in names %}
+                      <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
                   </datalist>
-              </div>
+                </div>
+                
                 <!-- <div class="mb-3 text-start lead">
                 <label for="teamInput" class="form-label">小隊</label>
                 <select
@@ -99,6 +100,23 @@
 
         </main> 
 
+        <script>
+            const input = document.getElementById('std_name');
+            const datalist = document.getElementById('names');
+
+            // Hide options on initial load
+            window.addEventListener("DOMContentLoaded", function () {
+          input.removeAttribute("list");
+            });
+
+            input.addEventListener("input", function () {
+          if (this.value.trim() === "") {
+              this.removeAttribute("list"); // Hide options when empty
+          } else {
+              this.setAttribute("list", "names"); // Show options when typing
+          }
+            });
+        </script>
       <!-- <script src="/js/stdLogin.js"></script> -->
               <!-- Bootstrap JavaScript Libraries -->
               <script

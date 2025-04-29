@@ -495,6 +495,8 @@ def std_index(request): # 學生主頁（表單導覽頁）
     formStatus[1] = student.form1_completed
     formStatus[2] = student.form2_completed
 
+    request.session['test'] = 0 #測試用
+
     select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
     SelectionStage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
     context = {
@@ -516,7 +518,8 @@ def select_form(request, form_stage): # 選課表單頁面
         # current_form_stage = AdminSetting.objects.get(setting_name='SelectionStage').configuration
         form_type = student_instance.j_or_h + str(form_stage) #returning J1, J2, H1, H2
         form_display = dict(Student.FORM_DISPLAY)[form_type] #returning 第一次選課｜國中部, 第二次選課｜國中部, 第一次選課｜高中部, 第二次選課｜高中部
-        
+
+
         student = {
             'std_id': std_id,
             'team_display': team_display,
@@ -528,7 +531,14 @@ def select_form(request, form_stage): # 選課表單頁面
         request.session['form_stage'] = form_stage
         request.session['form_type'] = form_type
         print('form_stage:', form_stage)
-        return render(request, 'select_form.html', {'student': student, 'team_display': team_display, 'form_display': form_display})
+        
+
+
+        return render(request, 'select_form.html', {
+            'student': student, 
+            'team_display': team_display, 
+            'form_display': form_display, 
+            })
     else:
         return redirect('/stdLogin')
 
@@ -542,6 +552,7 @@ def get_courses(request): # 從資料庫抓課程回傳到前端
         section_instances = Section.objects.filter(section_id__lte=selection_range)
         course_instances = Course.objects.filter(section_id__lte=selection_range, course_type__in=[student_instance.j_or_h, 'M', 'NA'])
         sp_course_instances = SpecialCourse.objects.filter(section_id__lte=selection_range, course_type=student_instance.j_or_h+'S') # 'JS'國中部課程, 'HS'高中部課程
+        print(sp_course_instances)
     else:
         section_instances = Section.objects.filter(section_id__gt=selection_range)
         course_instances = Course.objects.filter(section_id__gt=selection_range, course_type__in=[student_instance.j_or_h, 'M', 'NA'])
@@ -567,7 +578,6 @@ def get_courses(request): # 從資料庫抓課程回傳到前端
                     else:
                         teachers = [course.course_name.split('_')[1]]
                 else: teachers = []
-                print("老師："+str(teachers))
                 courses_in_section.append({
                     'course_id': course.course_id,
                     'course_name': course.course_name,
@@ -575,6 +585,7 @@ def get_courses(request): # 從資料庫抓課程回傳到前端
                     'course_type': course.course_type,
                     'teachers': teachers
                 })
+                print('SP_course:', course.course_name)
         else:
             for course in course_instances.filter(section_id=section.section_id):
                 if '_' in course.course_name:
@@ -583,7 +594,6 @@ def get_courses(request): # 從資料庫抓課程回傳到前端
                     else:
                         teachers = [course.course_name.split('_')[1]]
                 else: teachers = []
-                print("老師："+str(teachers))
                 courses_in_section.append({
                     'course_id': course.course_id,
                     'course_name': course.course_name,
@@ -600,20 +610,29 @@ def get_courses(request): # 從資料庫抓課程回傳到前端
             'num_courses': num_courses
         })
 
-    return JsonResponse({'sections_with_courses': sections_with_courses})
+    return JsonResponse({
+        'sections_with_courses': sections_with_courses,
+        'saved_selections': request.session.get('selections', []),
+        'test' : request.session['test']
+    })
 
 def double_check(request): # merge with confirm
     if request.method == 'POST':
         selections = request.POST.getlist('priority')
         std_id = request.session['std_id']
+
+
         # Temporarily save the user's choices in the session
         request.session['selections'] = selections
+
         # print('selections:', selections)
         return redirect('confirm')
 
     return redirect('select_form')
 
 def confirm(request): # 確認結果頁面
+    request.session['test'] = 1
+
     team_display = request.session['team_display']
     form_display = request.session['form_display']
     selections = request.session.get('selections', [])
@@ -646,9 +665,13 @@ def confirm(request): # 確認結果頁面
         'sorted_priorities': sorted_priorities,
         'team_display': team_display,
         'form_display': form_display,
+        'form_stage': request.session['form_stage'],
+        'test' : request.session['test']
     })
 
 def submit_form(request): # 提交志願表單
+    request.session['test'] = 0
+
     selections = request.session.get('selections', [])
     std_id = request.session['std_id']  # Assuming std_id is used as the username
     form_type = request.session['form_type']

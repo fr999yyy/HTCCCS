@@ -50,6 +50,7 @@
                 </div>
                 <div class="text-center mt-5">
                     <p class="text-danger" id="error-message">請仔細檢查！志願送出後就不能再做修改了！</p>
+                    <a href="{% url 'select_form' form_stage %}" class="btn btn-secondary">返回上一頁</a>
                     <a
                         name=""
                         id="pNext"
@@ -57,6 +58,7 @@
                         href="{% url 'submit_form' %}"
                         role="button"
                         >沒有填錯！送出！</a>
+
                 </div>
             </div>
         </main>

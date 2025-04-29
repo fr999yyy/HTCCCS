@@ -20,8 +20,8 @@ flex: 1; /* Ensure input takes up remaining space */
 margin:70px;
 }
 
-.bTitle{
-    font-size: 3vw !important;
+.bTitle {
+    font-size: clamp(1.5rem, 3vw, 2.5rem) !important;
 }
 
 .bNavLink:hover {
@@ -30,7 +30,7 @@ margin:70px;
 }
 
 .bUser{
-    font-size: 2.5vw !important; 
+    font-size: clamp(1.2rem, 2.5vw, 2rem) !important;
 }
 
 .backNav{
@@ -41,6 +41,28 @@ margin:70px;
     object-fit: cover;
     width: 80px;
     height: 80px;
+}
+
+
+.container {
+    max-width: 90%;
+}
+
+@media (max-width: 768px) {
+    .container {
+        max-width: 98%;
+    }
+    .profile {
+        object-fit: cover;
+        width: 60px;
+        height: 60px;
+    }
+    .button-text {
+        display: none;
+    }
+    .button-icon {
+        display: inline;
+    }
 }
 
 /* .info {

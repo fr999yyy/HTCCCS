@@ -162,7 +162,7 @@
                 results.forEach(result => {
                     const row = document.createElement('tr');
                     if (result.std_tag === 'gr') {
-                        row.classList.add('table-danger');
+                        row.classList.add('table-success');
                         console.log('gr');
                     }
                     row.innerHTML = `<td>${result.std_name}</td><td>${result.course_name}</td>`;
