@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-)fco_k7wkco8adi$v69mnm-##h4z6^c@-9o!c7upwqw%@d6y4)'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = []
 
@@ -61,12 +61,11 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR / 'media')
 
 if DEBUG:
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]  # Additional static files directories
 
-    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-
+# In production
 else:
-
-    STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Folder for collected static files
 
 
 ALLOWED_HOSTS = ['172.20.10.3', '127.0.0.1']
@@ -99,10 +98,10 @@ WSGI_APPLICATION = 'django_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', 
-        'NAME': 'htcccs',                      
-        'USER': 'root',                 
-        'PASSWORD': '**HTCCcs**',               
-        'HOST': '127.0.0.1',                           
+        'NAME': 'test_db',
+        'USER': 'test_user',  # Ensure this matches
+        'PASSWORD': 'your_password',  # Ensure this matches
+        'HOST': '172.18.0.2',  # Matches the service name in docker-compose.yml                         
         'PORT': '3306',  
         'OPTIONS': {
     'charset': 'utf8mb4', # utf8mb4 是為了支援顯示課程介紹中的表情符號
@@ -146,7 +145,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR / 'static'),]
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
