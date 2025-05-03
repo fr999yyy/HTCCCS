@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-)fco_k7wkco8adi$v69mnm-##h4z6^c@-9o!c7upwqw%@d6y4)'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = []
 
@@ -68,7 +68,7 @@ else:
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')  # Folder for collected static files
 
 
-ALLOWED_HOSTS = ['172.20.10.3', '127.0.0.1']
+ALLOWED_HOSTS = ['172.20.10.3', '127.0.0.1', 'htccs.ddns.net:80', 'htccs.ddns.net:443', 'localhost']  # Add your server's IP address or domain name here
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -100,8 +100,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql', 
         'NAME': 'test_db',
         'USER': 'test_user',  # Ensure this matches
-        'PASSWORD': 'your_password',  # Ensure this matches
-        'HOST': '172.18.0.2',  # Matches the service name in docker-compose.yml                         
+        'PASSWORD': 'testpassword',  # Ensure this matches
+        'HOST': 'mysql',  # Matches the service name in docker-compose.yml                         
         'PORT': '3306',  
         'OPTIONS': {
     'charset': 'utf8mb4', # utf8mb4 是為了支援顯示課程介紹中的表情符號

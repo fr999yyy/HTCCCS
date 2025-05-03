@@ -51,18 +51,17 @@ def stdLogin(request): # 學生登入
         std_name = request.POST['std_name']
         # team = request.POST['team']
         # satb = request.POST['satb']
-        student = std_authenticate(std_id=std_id, std_name= std_name)
-        student_instance = Student.objects.get(std_id=std_id)
-        select_before_camp = AdminSetting.objects.get(setting_name='select_before_camp').configuration
-
+        student = std_authenticate(std_id=std_id, std_name=std_name)
         if student is not None:
             std_login(request, student)
             print('login success')
             return redirect ('std_index')
+            pass
         else:
             messages.info(request, '無法登入，請檢查資料是否正確')
             print('login failed')
             return redirect('/stdLogin')
+            pass
     else:
         return render(request, 'stdLogin.html', {'names': list(Student.objects.values_list('std_name', flat=True))})
 
@@ -73,7 +72,7 @@ def csLogin(request): # 選課組登入
             return redirect('/csLogin')
         password = request.POST['password']
 
-        user = auth.authenticate(username='admin', password=password)
+        user = auth.authenticate(username='cs', password=password)
         if user is None:
             user = auth.authenticate(username='course_selection', password=password)
 

@@ -11,7 +11,7 @@ services:
       MYSQL_USER: test_user
       MYSQL_PASSWORD: testpassword
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - dbdata:/var/lib/mysql
     healthcheck:
@@ -23,18 +23,34 @@ services:
   web:
     build: .
     container_name: django_container
+    environment:
+      DJANGO_SUPERUSER_USERNAME: admin
+      DJANGO_SUPERUSER_EMAIL: wildiam356@gmail.com
+      DJANGO_SUPERUSER_PASSWORD: HTCCcs2025
     command: >
       sh -c "
       python manage.py migrate &&
+      python manage.py createsuperuser --noinput || true &&
       gunicorn django_project.wsgi:application --bind 0.0.0.0:8000
       "
     volumes:
       - .:/app
-    ports:
-      - "8000:8000"
     depends_on:
       mysql:
         condition: service_healthy
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx_container
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./staticfiles:/django_project/staticfiles
+    depends_on:
+      web:
+        condition: service_started
 
 volumes:
   dbdata:
