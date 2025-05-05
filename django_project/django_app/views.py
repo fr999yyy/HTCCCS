@@ -72,7 +72,7 @@ def csLogin(request): # 選課組登入
             return redirect('/csLogin')
         password = request.POST['password']
 
-        user = auth.authenticate(username='cs', password=password)
+        user = auth.authenticate(username='admin', password=password)
         if user is None:
             user = auth.authenticate(username='course_selection', password=password)
 

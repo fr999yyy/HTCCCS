@@ -23,14 +23,13 @@ services:
   web:
     build: .
     container_name: django_container
-    environment:
-      DJANGO_SUPERUSER_USERNAME: admin
-      DJANGO_SUPERUSER_EMAIL: wildiam356@gmail.com
-      DJANGO_SUPERUSER_PASSWORD: HTCCcs2025
+    # environment:
+    #   DJANGO_SUPERUSER_USERNAME: admin
+    #   DJANGO_SUPERUSER_EMAIL: wildiam356@gmail.com
+    #   DJANGO_SUPERUSER_PASSWORD: HTCCcs2025
     command: >
       sh -c "
       python manage.py migrate &&
-      python manage.py createsuperuser --noinput || true &&
       gunicorn django_project.wsgi:application --bind 0.0.0.0:8000
       "
     volumes:
