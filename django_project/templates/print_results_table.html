@@ -19,6 +19,7 @@
             crossorigin="anonymous"
         />
     </head>
+    
 
     <body>
         <header>
@@ -34,13 +35,15 @@
                         <tr>
                             <th colspan="2">時間</th>
                             {% for section in sections %}
-                                <th>{{ section.section_time }}</th>
+                            {% with formatted_time=section.section_time|replace:'）:）<br>' %}
+                            <th class="text-center">{{ formatted_time|safe }}</th>
+                            {% endwith %}
                             {% endfor %}
                         </tr>
                         <tr>
                             <th colspan="2">編號/姓名</th>
                             {% for section in sections %}
-                                <th>{{ section.section_display }}</th>
+                                <th class="text-center">{{ section.section_display }}</th>
                             {% endfor %}
                         </tr>
                         </thead>

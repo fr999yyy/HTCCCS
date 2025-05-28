@@ -83,6 +83,67 @@
                         </div>  
                     </div>
                  </div>
+
+                 <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-warning text-dark">
+                            <h4 class="mb-0">未完成選課表單的學生</h4>
+                        </div>
+                        <div class="card-body">
+                            {% if incomplete_form1_students %}
+                                <h5>第一次選課未完成</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>姓名</th>
+                                                <th>小隊</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student in incomplete_form1_students %}
+                                            <tr>
+                                                <td>{{ student.std_id }}</td>
+                                                <td>{{ student.std_name }}</td>
+                                                <td>{{ student.team }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-success"><i class="bi bi-check-circle"></i> 所有學生都已完成第一次選課</p>
+                            {% endif %}
+
+                            {% if incomplete_form2_students %}
+                                <h5 class="mt-4">第二次選課未完成</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>姓名</th>
+                                                <th>小隊</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for student in incomplete_form2_students %}
+                                            <tr>
+                                                <td>{{ student.std_id }}</td>
+                                                <td>{{ student.std_name }}</td>
+                                                <td>{{ student.team }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="text-success"><i class="bi bi-check-circle"></i> 所有學生都已完成第二次選課</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
         <footer>

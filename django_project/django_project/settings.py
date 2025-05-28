@@ -98,10 +98,10 @@ WSGI_APPLICATION = 'django_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql', 
-        'NAME': 'test_db',
-        'USER': 'test_user',  # Ensure this matches
-        'PASSWORD': 'testpassword',  # Ensure this matches
-        'HOST': 'mysql',  # Matches the service name in docker-compose.yml                         
+        'NAME': 'htcccs',                      
+        'USER': 'root',                 
+        'PASSWORD': '**HTCCcs**',               
+        'HOST': '127.0.0.1',                           
         'PORT': '3306',  
         'OPTIONS': {
     'charset': 'utf8mb4', # utf8mb4 是為了支援顯示課程介紹中的表情符號
