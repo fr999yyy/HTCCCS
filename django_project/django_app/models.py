@@ -50,7 +50,7 @@ class Student(models.Model):
     std_tag = models.CharField(max_length=15, blank=True, null=True)
     form1_completed = models.BooleanField(default=False)  # New field for 1st form completion
     form2_completed = models.BooleanField(default=False)  # New field for 2nd form completion
-    assigned =  models.BooleanField(default=False)  # New field for course assignment status
+
 
     def get_j_or_h(self):
         return self.dict(J_OR_H_CHOICES).get(j_or_h)

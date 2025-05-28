@@ -348,100 +348,140 @@ def upload_zip(request): # 匯入資料壓縮檔（基本資料、志工大頭�
         if 'DBzip' not in zip_file.name:
             messages.error(request, '請按照檔名與格式要求上傳')
             return redirect('updateData')
+            
         fs = FileSystemStorage()
         zip_filename = fs.save(zip_file.name, zip_file)
-        extract_folder = fs.location + '/'
-        folder_name = str(zip_file).split('.')[0] + '/'
         zip_path = fs.path(zip_filename)
-        path = fs.location + '/' + folder_name
+        extract_path = fs.location + '/' 
         
+        # Create a specific folder for extraction
+        # folder_name = 'DBzip'
+        # extract_path = os.path.join(extract_folder, folder_name)
+
+
         # Extract the zip file into the folder
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            for file in zip_ref.namelist():
-                # Decode the filename correctly
+            # Create extraction path before extracting
+            
+            # Extract all files with correct encoding for Traditional Chinese
+            for file_info in zip_ref.infolist():
+                file_name = file_info.filename
+                # Decode filename with cp437 and encode with utf-8 to handle Traditional Chinese
                 try:
-                    filename = file.encode('cp437').decode('utf-8')
+                    file_name = file_name.encode('cp437').decode('utf-8')
                 except UnicodeDecodeError:
-                    filename = file.encode('utf-8').decode('utf-8')
-
-                print(filename)
-                zip_ref.extract(file, extract_folder)  # Extract the file
-                os.chdir(extract_folder)  # Change to the target directory
-
-                # Rename the file to the correctly decoded filename
-                if os.path.exists(file):
-                    os.rename(file, filename)
-
-            extracted_files = {file.split('/')[-1] for file in zip_ref.namelist()}
-            print(extracted_files)
+                    # Fallback if the encoding conversion fails
+                    file_name = file_name.encode('cp437').decode('cp437')
+                
+                # Extract the file with the corrected filename
+                source = zip_ref.open(file_info.filename)
+                target_path = os.path.join(extract_path, file_name)
+                
+                # Create directories if needed
+                if file_info.is_dir():
+                    os.makedirs(target_path, exist_ok=True)
+                    continue
+                
+                # Make sure directory exists
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                
+                # Extract the file
+                with open(target_path, 'wb') as target:
+                    target.write(source.read())
+            
+            # Get a list of all extracted files
+            extracted_files = {os.path.basename(file_info.filename) for file_info in zip_ref.infolist() 
+                              if not file_info.is_dir()}
+        extract_path = os.path.join(extract_path, 'DBzip')  # Ensure the extraction path is correct
         
-        if extracted_files.isdisjoint(valid_files):
-            shutil.rmtree(path, ignore_errors=False)
+        if not extracted_files.intersection(valid_files):
+            try:
+                shutil.rmtree(extract_path, ignore_errors=True)
+            except (OSError, FileNotFoundError) as e:
+                print(f"Error removing directory {extract_path}: {e}")
+            
             fs.delete(zip_filename)
             messages.error(request, '請依照檔名與格式要求上傳')
             return redirect('updateData')
 
-        # 大頭貼路徑一律指定media/DBzip/pfp。原本要把大頭貼資料夾移到media，但又會有資料覆蓋的問題，重新上傳應該挺吃資源的
-        # 壓縮檔就統一叫DBzip就好
-        # pfp_folder_name = "pfp"
-        # pfp_folder_path = os.path.join(path, pfp_folder_name)
-        # if os.path.isdir(pfp_folder_path):
-        #     # Step 3: Move the folder to the destination directory
-        #     shutil.move(pfp_folder_path, fs.location)
-
         if 'db_import.xlsx' in extracted_files:
-            dfs = pd.read_excel(os.path.join(path, 'db_import.xlsx'), sheet_name=None)
-            for sheet_name, df in dfs.items():
-                if sheet_name == 'student':
-                    for _, row in df.iterrows():
-                        student_instance, created = Student.objects.get_or_create(std_id=row['std_id'])
-                        # print(row)
-                        student_instance.std_id = row['std_id']
-                        student_instance.std_name = row['std_name']
-                        student_instance.team = row['team']
-                        student_instance.satb = row['satb'].upper()
-                        student_instance.j_or_h = row['j_or_h'].upper()
-                        student_instance.std_tag = row.get('std_tag', '')
-                        student_instance.save()
-                elif sheet_name == 'section':
-                    for _, row in df.iterrows():
-                        # print(row)
-                        section_instance, created = Section.objects.get_or_create(section_id=row['section_id'])
-                        section_instance.section_id = row['section_id']
-                        section_instance.section_time = row['section_time']
-                        section_instance.section_display = row['section_display']
-                        section_instance.save()
-                elif sheet_name == 'volunteer':
-                    for _, row in df.iterrows():
-                        # print(row)
-                        volunteer_instance, created = Volunteer.objects.get_or_create(volunteer_id=row['volunteer_id'])
-                        volunteer_instance.volunteer_id = row['volunteer_id']
-                        volunteer_instance.camp_name = row['camp_name']
-                        volunteer_instance.save()
-                elif sheet_name == 'course':
-                    for _, row in df.iterrows():
-                        # print(row)
-                        if row['course_type'] == 'js' or row['course_type'] == 'hs':
-                            course_instance, created = SpecialCourse.objects.get_or_create(course_id=row['course_id'])
-                            course_instance.std_limit = 99 if pd.isna(row['std_limit']) else row['std_limit']
-                        else:
-                            course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
-                            course_instance.std_limit = 25 if pd.isna(row['std_limit']) else row['std_limit']
-                        course_instance.course_id = row['course_id']
-                        course_instance.course_name = row['course_name']
-                        course_instance.course_info = row['course_info'] if pd.notna(row['course_info']) else '無課程資訊'
-                        course_instance.course_type = row['course_type'].upper()
-                        # Retrieve the Section instance
-                        section_id = row.get('section_id')
-                        course_instance.section_id = Section.objects.get(section_id=section_id)
-                        course_instance.save()
-        # Cleanup: Remove the zip file and extracted folder
-        os.remove(zip_path)
-        # shutil.rmtree(path)
+            try:
+                excel_path = os.path.join(extract_path, 'db_import.xlsx')
+                print(f"Reading Excel file from: {excel_path}")
+                dfs = pd.read_excel(excel_path, sheet_name=None)
+                
+                for sheet_name, df in dfs.items():
+                    if sheet_name == 'student':
+                        for _, row in df.iterrows():
+                            student_instance, created = Student.objects.get_or_create(std_id=row['std_id'])
+                            student_instance.std_id = row['std_id']
+                            student_instance.std_name = row['std_name']
+                            student_instance.team = row['team']
+                            student_instance.satb = row['satb'].upper()
+                            student_instance.j_or_h = row['j_or_h'].upper()
+                            student_instance.std_tag = row.get('std_tag', '')
+                            student_instance.save()
+                    elif sheet_name == 'section':
+                        for _, row in df.iterrows():
+                            section_instance, created = Section.objects.get_or_create(section_id=row['section_id'])
+                            section_instance.section_id = row['section_id']
+                            section_instance.section_time = row['section_time']
+                            section_instance.section_display = row['section_display']
+                            section_instance.save()
+                    elif sheet_name == 'volunteer':
+                        for _, row in df.iterrows():
+                            volunteer_instance, created = Volunteer.objects.get_or_create(volunteer_id=row['volunteer_id'])
+                            volunteer_instance.volunteer_id = row['volunteer_id']
+                            volunteer_instance.camp_name = row['camp_name']
+                            volunteer_instance.save()
+                    elif sheet_name == 'course':
+                        for _, row in df.iterrows():
+                            if row['course_type'] == 'js' or row['course_type'] == 'hs':
+                                course_instance, created = SpecialCourse.objects.get_or_create(course_id=row['course_id'])
+                                course_instance.std_limit = 99 if pd.isna(row['std_limit']) else row['std_limit']
+                            else:
+                                course_instance, created = Course.objects.get_or_create(course_id=row['course_id'])
+                                course_instance.std_limit = 25 if pd.isna(row['std_limit']) else row['std_limit']
+                            course_instance.course_id = row['course_id']
+                            course_instance.course_name = row['course_name']
+                            course_instance.course_info = row['course_info'] if pd.notna(row['course_info']) else '無課程資訊'
+                            course_instance.course_type = row['course_type'].upper()
+                            # Retrieve the Section instance
+                            section_id = row.get('section_id')
+                            course_instance.section_id = Section.objects.get(section_id=section_id)
+                            course_instance.save()
+            except Exception as e:
+                messages.error(request, f'處理 Excel 檔案時發生錯誤: {str(e)}')
+                print(f'Excel processing error: {e}')
+                # Properly clean up any extracted files and the original zip file
+                # try:
+                #     # Remove the zip file
+                #     if os.path.exists(zip_path):
+                #         os.remove(zip_path)
+                    
+                #     # Remove the extracted directory and all its contents
+                #     if os.path.exists(extract_path):
+                #         shutil.rmtree(extract_path)
+                #         print(f"Cleaned up extracted files from: {extract_path}")
+                # except Exception as e:
+                #     print(f"Error during cleanup: {e}")
+                return redirect('updateData')
+                
+        # Cleanup: Remove the zip file but keep the extracted files if needed
+        try:
+            os.remove(zip_path)
+            # # Remove extracted files if possible
+            # try:
+            #     shutil.rmtree(extract_path)
+            #     print(f"Removed extracted files from: {extract_path}")
+            # except (OSError, FileNotFoundError) as e:
+            #     print(f"Error removing directory {extract_path}: {e}")
+        except (OSError, FileNotFoundError) as e:
+            print(f"Error removing file {zip_path}: {e}")
+            
         messages.success(request, '資料匯入已完成')
         return redirect('updateData')
     return redirect('updateData')
-
 
 
 def generate_xlsx(request): # 下載點名總表
@@ -866,7 +906,7 @@ def truncate_table(model): # 清空資料表
         table_name = model._meta.db_table
         cursor.execute(f'TRUNCATE TABLE `{table_name}`')
 
-@user_passes_test(is_admin)
+
 def truncate_data(request): # 選課組後台-清空選課資料 / 志願結果表格
     if request.method == 'POST':
         model_name = request.POST.get('model')
@@ -884,6 +924,17 @@ def truncate_data(request): # 選課組後台-清空選課資料 / 志願結果�
             Course.objects.all().delete()
             SpecialCourse.objects.all().delete()
             Volunteer.objects.all().delete()
+            media_storage = FileSystemStorage().location
+            # Remove all files in the media storage directory
+            for filename in os.listdir(media_storage):
+                file_path = os.path.join(media_storage, filename)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    print(f"Error removing file {file_path}: {e}")
             messages.success(request, '所有資料已經除')
         else:
             messages.error(request, '無效的模型名稱')
