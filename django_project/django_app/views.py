@@ -876,6 +876,15 @@ def truncate_data(request): # 選課組後台-清空選課資料 / 志願結果�
         elif model_name == 'SelectionResult':
             truncate_table(SelectionResult)
             messages.success(request, '志願結果已刪除')
+        elif model_name == 'All':
+            truncate_table(Selection)
+            truncate_table(SelectionResult)
+            Student.objects.all().delete()
+            Section.objects.all().delete()
+            Course.objects.all().delete()
+            SpecialCourse.objects.all().delete()
+            Volunteer.objects.all().delete()
+            messages.success(request, '所有資料已經除')
         else:
             messages.error(request, '無效的模型名稱')
 
