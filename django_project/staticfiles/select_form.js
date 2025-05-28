@@ -8,8 +8,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const sectionTab = document.getElementById('sectionTab');
             const sectionTabContent = document.getElementById('section-tabContent');
             const savedSelections = data.saved_selections;
-            const test = data.test; //測試功能
-            console.log('test:', test); //測試功能
+            // const test = data.test; //測試功能
+            // console.log('test:', test); //測試功能
 
             sectionsWithCourses.forEach((section, index) => {
                 // Create tab button
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const listGroup = document.createElement('ul');
                 listGroup.className = 'list-group';
-                var n = 1; //測試功能
+                // var n = 1; //測試功能
 
                 section.courses.forEach(course => {
                     const listItem = document.createElement('li');
@@ -55,26 +55,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         select.name = 'priority';
                         select.style.width = 'auto';
                         const option = document.createElement('option');
-                        option.selected = false; //測試功能
+                        // option.selected = false; //測試功能
                         option.textContent = '選擇志願';
 
                         select.appendChild(option);
-                        const testOption = document.createElement('option'); //測試功能
+                        // const testOption = document.createElement('option'); //測試功能
                         
-                        console.log('test:', test); //測試功能
-                        if (test === 0) {
-                            testOption.selected = true; //測試功能
-                        }
+                        // console.log('test:', test); //測試功能
+                        // if (test === 0) {
+                        //     testOption.selected = true; //測試功能
+                        // }
 
 
-                        testOption.textContent = '測試'; //測試功能   
-                        testOption.value = n+`-${course.course_id}-${stdId}-${section.section_id}`; //測試功能
-                        // console.log(testOption.value); //測試功能
-                        if (select){
-                            select.appendChild(testOption); //測試功能
-                        }
+                        // testOption.textContent = '測試'; //測試功能   
+                        // testOption.value = n+`-${course.course_id}-${stdId}-${section.section_id}`; //測試功能
+                        // // console.log(testOption.value); //測試功能
+                        // if (select){
+                        //     select.appendChild(testOption); //測試功能
+                        // }
                         
-                        n++; //測試功能
+                        // n++; //測試功能
                         
                         for (let i = 1; i <= section.num_courses; i++) {
                             const option = document.createElement('option');
