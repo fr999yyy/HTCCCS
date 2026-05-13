@@ -9,10 +9,20 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-import pymysql
-pymysql.install_as_MySQLdb()
 from pathlib import Path
 import os
+
+# Use SQLite on PythonAnywhere (free tier friendly) or when explicitly requested.
+USE_SQLITE = (
+    os.getenv('USE_SQLITE', '').lower() in ('1', 'true', 'yes')
+    or 'PYTHONANYWHERE_DOMAIN' in os.environ
+)
+
+if not USE_SQLITE:
+    try:
+        __import__('pymysql').install_as_MySQLdb()
+    except ModuleNotFoundError as exc:
+        raise RuntimeError('pymysql is required when USE_SQLITE is false') from exc
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -95,19 +105,27 @@ WSGI_APPLICATION = 'django_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql', 
-        'NAME': 'htcccs',                      
-        'USER': 'root',                 
-        'PASSWORD': '**HTCCcs**',               
-        'HOST': '127.0.0.1',                           
-        'PORT': '3306',  
-        'OPTIONS': {
-    'charset': 'utf8mb4', # utf8mb4 是為了支援顯示課程介紹中的表情符號
-    },                         
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('DB_NAME', 'htcccs'),
+            'USER': os.getenv('DB_USER', 'root'),
+            'PASSWORD': os.getenv('DB_PASSWORD', '**HTCCcs**'),
+            'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+            'PORT': os.getenv('DB_PORT', '3306'),
+            'OPTIONS': {
+                'charset': 'utf8mb4',  # utf8mb4 是為了支援顯示課程介紹中的表情符號
+            },
+        }
+    }
 
 
 # Password validation

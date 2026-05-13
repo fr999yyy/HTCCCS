@@ -417,8 +417,8 @@ def upload_zip(request): # 匯入資料壓縮檔（基本資料、志工大頭�
                             student_instance.std_id = row['std_id']
                             student_instance.std_name = row['std_name']
                             student_instance.team = row['team']
-                            student_instance.satb = row['satb'].upper()
-                            student_instance.j_or_h = row['j_or_h'].upper()
+                            student_instance.satb = row['satb'].upper() if pd.notna(row['satb']) else ''
+                            student_instance.j_or_h = row['j_or_h'].upper() if pd.notna(row['j_or_h']) else ''
                             student_instance.std_tag = row.get('std_tag', '')
                             student_instance.save()
                     elif sheet_name == 'section':
